@@ -40,6 +40,16 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt && .venv/bin/
 
 المفاتيح بتتحفظ في ملف `.env` على جهازك، ومش بتتبعت لأي حد غير جوجل.
 
+## الاستخدام من Claude Code
+
+نفس المميزات متاحة كأدوات (MCP) جوه Claude Code، فتقدر تقوله مثلًا «حلل كلمة شرح Claude وقارنها بشرح ChatGPT» أو «إيه الكلمات اللي الناس بحثت بيها ووصلت لقناتي الشهر ده». من فولدر مشروعك:
+
+```bash
+claude mcp add youtube-studio -- "<مكان المشروع>/.venv/Scripts/python.exe" "<مكان المشروع>/mcp_server.py"
+```
+
+لازم تشغّل `run.bat` مرة الأول عشان المكتبات تتسطّب، وتربط قناتك من الداشبورد لو عاوز أدوات «قناتي». الداشبورد والـ MCP بيستخدموا نفس المفاتيح ونفس البيانات.
+
 ## إزاي الأرقام بتتحسب
 
 - **الطلب:** سرعة مشاهدات أول 10 نتايج (مشاهدة في اليوم)، وأد إيه يوتيوب بيقترح الجملة بدري وإنت بتكتبها.
@@ -73,6 +83,14 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt && .venv/bin/
 ```
 
 Open the **Settings** page (الإعدادات) and add your own free Google Cloud keys: a YouTube Data API key, plus a Desktop-app OAuth client for the "my channel" page. Keys are stored in `.env` on your machine only.
+
+**Claude Code (MCP).** The same features are available as MCP tools (`analyze_keyword`, `keyword_ideas`, `analyze_video`, `seo_check`, `competitor_outliers`, `my_search_terms`, …). After running `run.bat` once:
+
+```bash
+claude mcp add youtube-studio -- "<repo>/.venv/Scripts/python.exe" "<repo>/mcp_server.py"
+```
+
+The dashboard and the MCP server share the same keys and data. Link your channel from the dashboard for the `my_*` tools.
 
 **How scores work.** vidIQ's search volume comes from its own user data, which no public API provides. Here, *demand* comes from how fast the top results gain views and how early autocomplete suggests the phrase; *competition* comes from the size of the ranking channels and how many of them use the phrase in their title. Treat the numbers as a way to compare keywords, not as real search counts.
 

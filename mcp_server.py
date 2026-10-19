@@ -1,0 +1,215 @@
+"""MCP server: the studio's features as tools for Claude Code (or any MCP client).
+
+Shares .env and data/ with the dashboard, so competitors added in one show up in the other.
+Linking your own channel (OAuth) is done once from the dashboard: run.bat → قناتي.
+
+Register with Claude Code:
+  claude mcp add youtube-studio -- "<path>/studio/.venv/Scripts/python.exe" "<path>/studio/mcp_server.py"
+"""
+
+import functools
+
+import httpx
+from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
+
+from app import analytics, competitors, config, db, keywords, oauth, seo, suggest, util, youtube
+
+server = MCPServer(
+    name="youtube-studio",
+    instructions=(
+        "YouTube research tools (a local vidIQ/TubeBuddy alternative). The YouTube Data API has a free quota "
+        "of 10,000 units/day: analyze_keyword costs ~102 units, everything else 0-4. Prefer the free tools "
+        "(autocomplete, keyword_ideas, seo_check) for brainstorming and only analyze the most promising keywords. "
+        "Scores are estimates for comparing keywords, not real search volumes."
+    ),
+)
+
+VIDEO_URL = "https://www.youtube.com/watch?v="
+
+
+def tool(fn):
+    """Register a tool, turning the app's errors into messages the model can read and act on."""
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except youtube.YouTubeError as e:
+            raise ToolError(str(e)) from e
+        except oauth.AuthError as e:
+            raise ToolError(f"{e} Link the channel once from the dashboard: run studio/run.bat, open قناتي.") from e
+        except httpx.HTTPError as e:
+            raise ToolError("Network error talking to Google. Check the internet connection and retry.") from e
+    return server.tool()(wrapper)
+
+
+def _video(v, *extra):
+    """Compact video row for the model: no thumbnails or descriptions."""
+    row = {
+        "title": v["title"],
+        "url": VIDEO_URL + (v.get("id") or v.get("video_id")),
+        "channel": v.get("channel_title", ""),
+        "views": v["views"],
+        "views_per_day": v["vpd"],
+        "age_days": v["age_days"],
+        "is_short": v["is_short"],
+    }
+    for key in extra:
+        if key in v:
+            row[key] = v[key]
+    return row
+
+
+# ---------- keywords ----------
+
+@tool
+def autocomplete(query: str) -> list[str]:
+    """YouTube search suggestions for a query, as people type it. Free (no quota)."""
+    return suggest.autocomplete(query)
+
+
+@tool
+def keyword_ideas(keyword: str) -> list[str]:
+    """Long-tail keyword ideas: autocomplete for the keyword + every letter, and question words in front. Free."""
+    return suggest.explore(keyword)
+
+
+@tool
+def analyze_keyword(keyword: str) -> dict:
+    """Score a keyword 0-100 (overall, demand, competition) from the top 25 YouTube results, with notes,
+    related searches, most-used tags and the ranking videos. Costs ~102 quota units."""
+    d = keywords.analyze(keyword)
+    if d.get("empty"):
+        return d
+    d["videos"] = [_video(v, "subs", "outlier", "title_match") for v in d["videos"]]
+    d["note"] = "outlier here = views / channel subscribers. demand/competition are estimates."
+    return d
+
+
+# ---------- videos & SEO ----------
+
+@tool
+def analyze_video(url: str, keyword: str = "") -> dict:
+    """A video's stats, tags, description, performance vs its channel's usual (outlier = views / channel median)
+    and an SEO checklist (pass `keyword` to check targeting). Costs ~4 quota units."""
+    vid = util.video_id(url)
+    if not vid:
+        raise youtube.YouTubeError("Not a YouTube video URL.")
+    items = youtube.videos([vid], ttl=3600)
+    if not items:
+        raise youtube.YouTubeError("Video not found or private.")
+    v = youtube.summary(items[0])
+    channel = youtube.channels([v["channel_id"]])[0]
+    recent = [youtube.summary(x) for x in youtube.uploads(channel)]
+    median = util.median([x["views"] for x in recent if x["is_short"] == v["is_short"] and x["id"] != v["id"]])
+    row = _video(v, "likes", "comments", "duration", "tags", "description", "published")
+    row["channel_subs"] = youtube.channel_summary(channel)["subs"]
+    row["channel_median_views"] = round(median)
+    row["outlier"] = round(v["views"] / median, 2) if median else None
+    row["seo"] = seo.score(v["title"], v["description"], v["tags"], keyword)
+    return row
+
+
+@tool
+def seo_check(title: str, description: str = "", tags: list[str] | None = None, keyword: str = "") -> dict:
+    """Score a draft title/description/tags 0-100 with a checklist and fix tips (Arabic). Free."""
+    return seo.score(title, description, tags or [], keyword)
+
+
+# ---------- competitors ----------
+
+@tool
+def list_competitors() -> list[dict]:
+    """Tracked competitor channels with subscribers, usual views (median) and uploads in the last 30 days."""
+    return [
+        {k: c[k] for k in ("channel_id", "title", "handle", "subs", "median_views", "median_views_shorts", "uploads_30d")}
+        for c in competitors.list_all()
+    ]
+
+
+@tool
+def add_competitor(channel: str) -> dict:
+    """Track a channel by URL, @handle or UC… id (a plain name costs a 100-unit search). ~3 quota units."""
+    c = competitors.add(channel)
+    return {k: c[k] for k in ("id", "title", "handle", "subs", "video_count")}
+
+
+@tool
+def remove_competitor(channel_id: str) -> str:
+    """Stop tracking a competitor (channel_id from list_competitors) and delete its stored videos."""
+    competitors.remove(channel_id)
+    return "removed"
+
+
+@tool
+def competitor_outliers(days: int = 90, format: str = "long", channel_id: str = "", limit: int = 25) -> list[dict]:
+    """Competitors' videos that beat their channel's usual views (outlier = views / channel median).
+    format: long | short | all. Uses stored data (free); call refresh_competitors for fresh numbers."""
+    rows = competitors.outliers(days, format, channel_id or None, limit)
+    return [{**_video(r, "outlier", "channel_median", "growth_per_day"), "channel": r["channel_title"]} for r in rows]
+
+
+@tool
+def refresh_competitors() -> str:
+    """Re-fetch all competitors' latest 50 uploads (~3 quota units per channel)."""
+    return f"refreshed {competitors.refresh_all()} channels"
+
+
+@tool
+def best_posting_time() -> dict:
+    """Median outlier score of competitors' long videos by weekday and 3-hour block (local time). Free."""
+    return competitors.timing()
+
+
+# ---------- my channel (needs OAuth from the dashboard) ----------
+
+@tool
+def my_channel(days: int = 28) -> dict:
+    """Your channel: totals vs the previous period and daily views. Requires linking the channel once in the dashboard."""
+    return {"channel": analytics.me(), **analytics.overview(days)}
+
+
+@tool
+def my_search_terms(days: int = 28) -> list[dict]:
+    """The real YouTube searches that brought viewers to your videos, with views."""
+    return [{"term": r["insightTrafficSourceDetail"], "views": r["views"]} for r in analytics.search_terms(days)]
+
+
+@tool
+def my_top_videos(days: int = 28) -> list[dict]:
+    """Your videos ranked by views in the period: watch time, average view duration/percentage, subscribers gained."""
+    rows = analytics.top_videos(days)
+    return [
+        {
+            "title": r["title"], "url": VIDEO_URL + r["video"], "views": r["views"],
+            "watch_hours": round(r["estimatedMinutesWatched"] / 60, 1),
+            "avg_view_seconds": r["averageViewDuration"], "avg_view_percent": round(r["averageViewPercentage"], 1),
+            "subscribers_gained": r["subscribersGained"], "is_short": r["is_short"],
+        }
+        for r in rows
+    ]
+
+
+@tool
+def my_traffic_sources(days: int = 28) -> list[dict]:
+    """Where your views come from (search, suggested, browse, external...)."""
+    return [{"source": r["label"], "views": r["views"], "watch_minutes": r["estimatedMinutesWatched"]} for r in analytics.traffic(days)]
+
+
+@tool
+def my_audience(days: int = 28) -> dict:
+    """Top countries by views, and viewer percentage by age group and gender."""
+    return analytics.audience(days)
+
+
+@tool
+def quota_status() -> dict:
+    """YouTube Data API units used today (resets at midnight Pacific, ~10:00 Cairo) and whether keys are set."""
+    return {
+        "used": db.quota_used(), "limit": config.DAILY_QUOTA,
+        "has_api_key": bool(config.get("YOUTUBE_API_KEY")), "channel_linked": oauth.connected(),
+    }
+
+
+if __name__ == "__main__":
+    server.run()
