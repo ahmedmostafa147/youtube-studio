@@ -111,8 +111,24 @@ class Settings(BaseModel):
     brand_query: str | None = None
 
 
+CLIENT_ID = re.compile(r"^\d+-[a-z0-9]+\.apps\.googleusercontent\.com$")
+
+
+def _check_keys(s):
+    """Catch a key pasted into the wrong field before it breaks sign-in with a vague Google error."""
+    cid, secret, key = s.google_client_id.strip(), s.google_client_secret.strip(), s.youtube_api_key.strip()
+    if cid and not CLIENT_ID.match(cid):
+        hint = " ده شكله الـ Client Secret." if cid.startswith("GOCSPX") else " ده شكله الـ API key." if cid.startswith("AIza") else ""
+        raise ValueError("الـ Client ID لازم يبقى زي 1234567890-abc123.apps.googleusercontent.com." + hint)
+    if secret and (secret.endswith("googleusercontent.com") or secret.startswith("AIza")):
+        raise ValueError("ده مش الـ Client Secret. الـ Secret بيبدأ عادةً بـ GOCSPX-.")
+    if key and not key.startswith("AIza"):
+        raise ValueError("الـ YouTube API key بيبدأ بـ AIza. اتأكد إنك نسخت المفتاح الصح.")
+
+
 @app.post("/api/settings")
 def save_settings(s: Settings):
+    _check_keys(s)
     updates = {
         "YOUTUBE_API_KEY": s.youtube_api_key,
         "GOOGLE_CLIENT_ID": s.google_client_id,

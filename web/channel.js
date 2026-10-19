@@ -6,7 +6,8 @@ const meRoot = $('#me-root');
 let meDays = 28;
 let meLoaded = false;
 
-onEnter.me = () => loadMe();
+// Always rebuild: the setup checklist and numbers change as you add competitors or link the channel.
+onEnter.me = () => loadMe(true);
 
 function lineChart(points) {
   if (points.length < 2) return '';
