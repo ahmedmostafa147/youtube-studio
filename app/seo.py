@@ -13,6 +13,13 @@ def tags_length(tags):
     return sum(len(t) + (2 if " " in t else 0) for t in tags) + max(len(tags) - 1, 0)
 
 
+def title_score(title, keyword):
+    """Score of the title checks alone (0-100), for ranking generated titles."""
+    checks = [c for c in score(title, "", [], keyword)["checks"] if c["group"] == "العنوان"]
+    possible = sum(c["points"] for c in checks)
+    return round(sum(c["earned"] for c in checks) / possible * 100) if possible else 0
+
+
 def score(title, description, tags, keyword):
     title, description, keyword = title.strip(), description.strip(), keyword.strip()
     tags = [t.strip() for t in tags if t.strip()]

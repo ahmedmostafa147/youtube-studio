@@ -8,7 +8,7 @@ import time
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
-from . import config, db, util, youtube
+from . import alerts, config, db, hourly, util, youtube
 
 STALE_AFTER = 12 * 3600
 WEEKDAYS = ["الاتنين", "التلات", "الأربع", "الخميس", "الجمعة", "السبت", "الحد"]
@@ -35,6 +35,15 @@ def remove(channel_id):
     db.execute("DELETE FROM videos WHERE channel_id = ?", (channel_id,))
 
 
+def snapshot_channel(c):
+    """Record today's subscribers/views for a channel summary, to measure growth over time."""
+    day = datetime.now(config.tz()).date().isoformat()
+    db.execute(
+        "INSERT OR REPLACE INTO channel_snapshots (channel_id, day, subs, views, videos) VALUES (?, ?, ?, ?, ?)",
+        (c["id"], day, c["subs"], c["view_count"], c["video_count"]),
+    )
+
+
 def refresh(channel_id, channel=None):
     """Re-read channel stats and latest 50 uploads (about 3 quota units)."""
     if channel is None:
@@ -43,11 +52,21 @@ def refresh(channel_id, channel=None):
             return
         channel = items[0]
     c = youtube.channel_summary(channel)
+    previous = db.query("SELECT refreshed FROM competitors WHERE channel_id = ?", (channel_id,))
+    known = {r["video_id"] for r in db.query("SELECT video_id FROM videos WHERE channel_id = ?", (channel_id,))}
     db.execute(
         "UPDATE competitors SET title=?, handle=?, thumbnail=?, subs=?, video_count=?, view_count=?, refreshed=? WHERE channel_id=?",
         (c["title"], c["handle"], c["thumbnail"], c["subs"], c["video_count"], c["view_count"], time.time(), channel_id),
     )
+    snapshot_channel(c)
     videos = [youtube.summary(v) for v in youtube.uploads(channel, ttl=0)]
+    hourly.record(videos)
+    # Alert only after the first refresh, so adding a channel doesn't flood the list with its back catalogue.
+    if previous and previous[0]["refreshed"]:
+        for v in videos:
+            if v["id"] not in known and v["age_days"] <= 3:
+                alerts.add(f"upload:{v['id']}", "upload", f"{c['title']} نزّل فيديو جديد", v["title"],
+                           f"https://www.youtube.com/watch?v={v['id']}", v["thumbnail"])
     now = time.time()
     day = datetime.now(config.tz()).date().isoformat()
     db.executemany(
@@ -141,13 +160,47 @@ def outliers(days=90, fmt="all", channel_id=None, limit=60):
     rows = rows[:limit]
 
     names = {c["channel_id"]: c for c in db.query("SELECT channel_id, title, thumbnail, subs FROM competitors")}
-    growth = _growth([r["video_id"] for r in rows])
+    ids = [r["video_id"] for r in rows]
+    growth = _growth(ids)
+    per_hour = hourly.vph(ids)
     for r in rows:
         c = names.get(r["channel_id"], {})
         r["channel_title"] = c.get("title", "")
         r["subs"] = c.get("subs", 0)
         r["growth_per_day"] = growth.get(r["video_id"])
+        r["vph"] = per_hour.get(r["video_id"])
     return rows
+
+
+def check_takeoffs():
+    """Alert when a competitor's video from the last 3 days is already at 2x its channel's usual views."""
+    rows = _with_outlier_scores(_videos())
+    names = {c["channel_id"]: c["title"] for c in db.query("SELECT channel_id, title FROM competitors")}
+    for r in rows:
+        if r["age_days"] <= 3 and (r["outlier"] or 0) >= 2:
+            alerts.add(f"takeoff:{r['video_id']}", "takeoff", f"فيديو بيفرقع عند {names.get(r['channel_id'], '')}",
+                       f"{r['title']} (×{r['outlier']:.1f} من المعتاد في {r['age_days']:.0f} يوم)",
+                       f"https://www.youtube.com/watch?v={r['video_id']}", r["thumbnail"])
+
+
+def growth(channel_id, days=30):
+    """Subscriber and view growth from stored daily snapshots (None until there are two days of data)."""
+    rows = db.query("SELECT day, subs, views FROM channel_snapshots WHERE channel_id = ? ORDER BY day", (channel_id,))
+    if len(rows) < 2:
+        return None
+    latest = rows[-1]
+    cutoff = (datetime.fromisoformat(latest["day"]) - timedelta(days=days)).date().isoformat()
+    base = next((r for r in rows if r["day"] >= cutoff), rows[0])
+    span = (datetime.fromisoformat(latest["day"]) - datetime.fromisoformat(base["day"])).days
+    if span < 1:
+        return None
+    return {
+        "days": span,
+        "subs": latest["subs"] - base["subs"],
+        "views": latest["views"] - base["views"],
+        "subs_per_day": (latest["subs"] - base["subs"]) / span,
+        "views_per_day": (latest["views"] - base["views"]) / span,
+    }
 
 
 def timing():

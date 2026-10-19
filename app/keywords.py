@@ -8,7 +8,9 @@ vidIQ and TubeBuddy estimate search volume from data we don't have. We approxima
 import math
 from collections import Counter
 
-from . import suggest, util, youtube
+from . import db, suggest, util, youtube
+
+CACHE_PREFIX = "kw:"
 
 
 def log_score(value, top):
@@ -76,7 +78,7 @@ def analyze(keyword):
     for v in videos:
         tag_counts.update({t.strip().lower() for t in v["tags"] if t.strip()})
 
-    return {
+    result = {
         "keyword": keyword,
         "scores": {
             "overall": overall, "overall_label": label(overall),
@@ -91,3 +93,10 @@ def analyze(keyword):
         "tags": [{"tag": t, "count": c} for t, c in tag_counts.most_common(30)],
         "videos": videos,
     }
+    db.cache_set(CACHE_PREFIX + util.normalize(keyword), result)
+    return result
+
+
+def cached(keyword, max_age=7 * 24 * 3600):
+    """The last analysis of a keyword, without spending quota (None if never analyzed recently)."""
+    return db.cache_get(CACHE_PREFIX + util.normalize(keyword), max_age)

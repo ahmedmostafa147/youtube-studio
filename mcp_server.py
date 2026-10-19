@@ -13,7 +13,9 @@ import httpx
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
-from app import analytics, competitors, config, db, keywords, oauth, seo, suggest, util, youtube
+from app import alerts as alerts_mod
+from app import (analytics, competitors, config, db, insights, jobs, keywords, mychannel, oauth, planner, seo,
+                 suggest, trends, util, youtube)
 
 server = MCPServer(
     name="youtube-studio",
@@ -21,7 +23,10 @@ server = MCPServer(
         "YouTube research tools (a local vidIQ/TubeBuddy alternative). The YouTube Data API has a free quota "
         "of 10,000 units/day: analyze_keyword costs ~102 units, everything else 0-4. Prefer the free tools "
         "(autocomplete, keyword_ideas, seo_check) for brainstorming and only analyze the most promising keywords. "
-        "Scores are estimates for comparing keywords, not real search volumes."
+        "Scores are estimates for comparing keywords, not real search volumes. "
+        "For titles, descriptions, scripts, chapters and video ideas, write them yourself from this data "
+        "(idea_signals, analyze_keyword, competitor_outliers, my_search_terms) and check them with score_titles, "
+        "seo_check and ad_safety_check. No extra AI key is needed for that."
     ),
 )
 
@@ -209,6 +214,162 @@ def quota_status() -> dict:
         "used": db.quota_used(), "limit": config.DAILY_QUOTA,
         "has_api_key": bool(config.get("YOUTUBE_API_KEY")), "channel_linked": oauth.connected(),
     }
+
+
+# ---------- phase 1: ideas, alerts, trends ----------
+
+@tool
+def idea_signals() -> dict:
+    """Everything that hints at a good next video: competitor outliers (30 days), trending videos in your niche,
+    your real search terms and top videos (if the channel is linked), and ideas already planned.
+    Use it to propose video ideas yourself; no AI key is needed. About 1-3 quota units."""
+    return insights.idea_signals()
+
+
+@tool
+def trending_videos(category_id: str = "", niche_only: bool = False) -> list[dict]:
+    """YouTube's most popular videos in your region (1 quota unit). niche_only keeps videos matching your niche keywords."""
+    rows = trends.trending(category_id)
+    if niche_only:
+        rows = [v for v in rows if v["niche"]]
+    return [{**_video(v), "rank": v["rank"], "niche": v["niche"]} for v in rows]
+
+
+@tool
+def alerts(unread_only: bool = True, limit: int = 30) -> list[dict]:
+    """New competitor uploads, competitor videos taking off, and niche trends found by the background checks."""
+    return [{k: a[k] for k in ("id", "kind", "title", "body", "url", "read")} for a in alerts_mod.recent(limit, unread_only)]
+
+
+@tool
+def mark_alerts_read() -> str:
+    """Mark every alert as read."""
+    alerts_mod.mark_read()
+    return "done"
+
+
+@tool
+def run_checks() -> dict:
+    """Run the background checks now: refresh competitors, find take-offs and niche trends, record your recent views.
+    About 3 quota units per competitor."""
+    return jobs.run_once()
+
+
+@tool
+def list_ideas() -> list[dict]:
+    """The video planner: every idea with its stage (idea, writing, filming, editing, published)."""
+    return [{k: i[k] for k in ("id", "title", "keyword", "notes", "status", "source")} for i in planner.ideas()]
+
+
+@tool
+def add_idea(title: str, keyword: str = "", notes: str = "") -> dict:
+    """Add a video idea to the planner (shows up in the dashboard too)."""
+    return planner.add_idea(title, keyword, notes, source="claude")
+
+
+@tool
+def update_idea(idea_id: int, status: str = "", title: str = "", keyword: str = "", notes: str = "") -> dict:
+    """Change an idea's stage (idea, writing, filming, editing, published) or its text."""
+    return planner.update_idea(idea_id, status=status or None, title=title or None, keyword=keyword or None, notes=notes or None)
+
+
+# ---------- phase 1: writing helpers (you write; these check) ----------
+
+@tool
+def score_titles(titles: list[str], keyword: str = "") -> list[dict]:
+    """Score candidate titles 0-100 on length and where the target phrase sits. Free. Use it to rank titles you wrote."""
+    rows = [{"title": t, "length": len(t), "seo_score": seo.title_score(t, keyword)} for t in titles]
+    return sorted(rows, key=lambda r: r["seo_score"], reverse=True)
+
+
+@tool
+def ad_safety_check(title: str = "", description: str = "", tags: list[str] | None = None, transcript: str = "") -> dict:
+    """Words that often get a video limited ads (YouTube advertiser-friendly guidelines), by where they appear. Free."""
+    return insights.ad_safety(title, description, tags or [], transcript)
+
+
+@tool
+def sort_tags(tags: list[str], keyword: str = "") -> list[str]:
+    """Remove duplicate tags and put the exact target phrase first, then related tags. Free."""
+    return planner.sort_tags(tags, keyword)
+
+
+@tool
+def tag_lists() -> list[dict]:
+    """Saved tag lists."""
+    return planner.tag_lists()
+
+
+@tool
+def save_tag_list(name: str, tags: list[str]) -> str:
+    """Save (or replace) a named tag list."""
+    planner.save_tag_list(name, tags)
+    return "saved"
+
+
+# ---------- phase 1: channel insights ----------
+
+@tool
+def set_my_channel(channel: str) -> dict:
+    """Set your own channel by URL or @handle, so the my_* public tools and the scorecard know which one is yours."""
+    c = mychannel.set_channel(channel)
+    config.save({"MY_CHANNEL_TITLE": c["title"]})
+    return c
+
+
+@tool
+def my_recent_videos() -> dict:
+    """Your latest uploads with views, views per hour and last-48h views (needs your channel set). ~3 quota units."""
+    d = mychannel.recent()
+    return {"channel": d["channel"], "videos": [_video(v, "vph", "last_48h") for v in d["videos"]]}
+
+
+@tool
+def channel_audit(channel: str = "") -> dict:
+    """Health check of a channel's last 50 uploads (yours by default): upload rhythm, view trend, chapters,
+    descriptions, tags, title length, engagement, best and worst videos. ~3 quota units."""
+    a = insights.audit(channel)
+    for key in ("best", "worst"):
+        a[key] = [_video(v, "outlier") for v in a.get(key, [])]
+    return a
+
+
+@tool
+def video_retention(url: str) -> dict:
+    """Audience retention curve of one of YOUR videos: % still watching at 30s and halfway, and the biggest drops.
+    Needs the channel linked (OAuth)."""
+    return insights.retention(url)
+
+
+@tool
+def scorecard() -> dict:
+    """Your channel next to every competitor: subscribers, growth, usual views, uploads, engagement, views per sub,
+    outliers in 90 days, each with its rank."""
+    return insights.scorecard()
+
+
+@tool
+def earnings_estimate(rpm: float = 0, channel: str = "") -> dict:
+    """Estimated monthly/yearly earnings and channel value from views and an RPM in USD (yours by default)."""
+    return insights.earnings(rpm or None, channel)
+
+
+@tool
+def milestones() -> dict:
+    """Next subscriber/view milestones with an estimated date, and progress toward the Partner Program."""
+    return insights.milestones()
+
+
+@tool
+def comment_insights(url: str) -> dict:
+    """A video's top 200 comments: most used words, questions, requests, most liked. Summarize them yourself. ~3 units."""
+    return insights.comments(url)
+
+
+@tool
+def backup_channel() -> dict:
+    """Save every upload's title, description, tags and stats to JSON + CSV in studio/data/backups."""
+    return insights.backup()
 
 
 if __name__ == "__main__":

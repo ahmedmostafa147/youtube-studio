@@ -25,20 +25,37 @@ CREATE INDEX IF NOT EXISTS videos_channel ON videos(channel_id);
 CREATE TABLE IF NOT EXISTS snapshots (
     video_id TEXT, day TEXT, views INTEGER, PRIMARY KEY (video_id, day)
 );
+CREATE TABLE IF NOT EXISTS hourly (
+    video_id TEXT, ts REAL, views INTEGER, PRIMARY KEY (video_id, ts)
+);
+CREATE TABLE IF NOT EXISTS channel_snapshots (
+    channel_id TEXT, day TEXT, subs INTEGER, views INTEGER, videos INTEGER, PRIMARY KEY (channel_id, day)
+);
+CREATE TABLE IF NOT EXISTS alerts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT UNIQUE, kind TEXT, title TEXT, body TEXT,
+    url TEXT, thumbnail TEXT, created REAL, read INTEGER DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS ideas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, keyword TEXT, notes TEXT,
+    status TEXT DEFAULT 'idea', score INTEGER, source TEXT, created REAL, updated REAL
+);
+CREATE TABLE IF NOT EXISTS tag_lists (name TEXT PRIMARY KEY, tags TEXT NOT NULL, updated REAL);
 """
 
 PACIFIC = ZoneInfo("America/Los_Angeles")
 
 _lock = threading.Lock()
-_conn = sqlite3.connect(config.DATA_DIR / "studio.db", check_same_thread=False)
+# The dashboard and the MCP server are separate processes sharing this file; wait instead of failing on a lock.
+_conn = sqlite3.connect(config.DATA_DIR / "studio.db", check_same_thread=False, timeout=15)
 _conn.row_factory = sqlite3.Row
 _conn.executescript(SCHEMA)
 
 
 def execute(sql, params=()):
     with _lock:
-        _conn.execute(sql, params)
+        cur = _conn.execute(sql, params)
         _conn.commit()
+        return cur.lastrowid
 
 
 def executemany(sql, rows):

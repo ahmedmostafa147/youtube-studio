@@ -8,16 +8,19 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Alexandria:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/style.css?v=5">
+  <link rel="stylesheet" href="/static/style.css?v=8">
 </head>
 <body>
 <div class="shell">
   <aside class="sidebar">
     <div class="brand"><span class="nuqta"></span><span>Studio</span></div>
     <nav>
+      <a href="#ideas" data-view="ideas">الأفكار <span class="count-badge num" id="alert-count" hidden></span></a>
       <a href="#keywords" data-view="keywords">الكلمات المفتاحية</a>
-      <a href="#video" data-view="video">تحليل فيديو</a>
+      <a href="#write" data-view="write">الكتابة بالـ AI</a>
+      <a href="#thumb" data-view="thumb">الثمبنيل</a>
       <a href="#seo" data-view="seo">SEO</a>
+      <a href="#video" data-view="video">تحليل فيديو</a>
       <a href="#competitors" data-view="competitors">المنافسين</a>
       <a href="#me" data-view="me">قناتي</a>
       <a href="#settings" data-view="settings">الإعدادات</a>
@@ -34,6 +37,116 @@
       <span>محتاج YouTube API key عشان التحليل يشتغل.</span>
       <a href="#settings">حطه من الإعدادات</a>
     </div>
+
+    <!-- ===== ideas & alerts ===== -->
+    <section class="view" id="view-ideas" hidden>
+      <header class="view-head">
+        <h1>الأفكار والتنبيهات</h1>
+        <p class="muted">اللي بيحصل في مجالك في مكان واحد: فيديوهات المنافسين الجديدة واللي بتفرقع، والترند في مجالك، وأفكار يومية، ومخطط فيديوهاتك الجاية.</p>
+      </header>
+      <div class="grid two">
+        <div class="panel">
+          <div class="panel-head"><h2>التنبيهات</h2>
+            <div class="row-inline">
+              <button class="btn small" type="button" id="alerts-run">افحص دلوقتي</button>
+              <button class="btn small ghost" type="button" id="alerts-read">علّم الكل مقروء</button>
+            </div>
+          </div>
+          <p class="muted small" id="alerts-meta"></p>
+          <div id="alerts-list"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h2>أفكار النهارده</h2><button class="btn small" type="button" id="daily-refresh">ولّد أفكار جديدة</button></div>
+          <p class="muted small">بالـ AI، من الفيديوهات اللي فرقعت عند المنافسين، والترند في مجالك، والكلمات اللي جابتلك مشاهدات.</p>
+          <div id="daily-ideas"></div>
+        </div>
+      </div>
+
+      <div class="section-head"><h2>مخطط الفيديوهات</h2></div>
+      <form class="searchbar" id="idea-form" autocomplete="off">
+        <input id="idea-title" placeholder="فكرة فيديو جديدة">
+        <input id="idea-keyword" class="narrow" placeholder="الكلمة المستهدفة (اختياري)">
+        <button class="btn primary" type="submit">ضيف</button>
+      </form>
+      <div class="board" id="planner"></div>
+
+      <div class="section-head">
+        <h2>الترند في بلدك</h2>
+        <div class="filters">
+          <select id="trend-cat"><option value="">كل الأقسام</option></select>
+          <label class="check-inline"><input type="checkbox" id="trend-niche"> مجالي بس</label>
+        </div>
+      </div>
+      <div id="trend-list"></div>
+    </section>
+
+    <!-- ===== AI writing ===== -->
+    <section class="view" id="view-write" hidden>
+      <header class="view-head">
+        <h1>الكتابة بالـ AI</h1>
+        <p class="muted">عناوين ووصف وسكريبت و Chapters بصوت قناتك. محتاج Claude API key من الإعدادات (الطلب الواحد بسنتات)، أو اطلبها ببلاش من Claude Code.</p>
+      </header>
+      <div class="tabs" role="tablist">
+        <button class="tab" type="button" role="tab" data-tab="titles" aria-selected="true">عناوين</button>
+        <button class="tab" type="button" role="tab" data-tab="description" aria-selected="false">وصف وتاجز</button>
+        <button class="tab" type="button" role="tab" data-tab="script" aria-selected="false">سكريبت</button>
+        <button class="tab" type="button" role="tab" data-tab="chapters" aria-selected="false">Chapters</button>
+      </div>
+      <form class="panel" id="write-form" autocomplete="off">
+        <label data-show="titles script">موضوع الفيديو
+          <textarea id="write-topic" name="topic" rows="2" placeholder="الفيديو عن إيه بالظبط؟"></textarea>
+        </label>
+        <label data-show="description">العنوان
+          <input id="write-title" name="title">
+        </label>
+        <label data-show="titles description script">الكلمة المستهدفة
+          <input id="write-keyword" name="keyword" placeholder="الجملة اللي عاوز تظهر فيها في البحث">
+        </label>
+        <label data-show="script">المدة بالدقايق
+          <input id="write-minutes" name="minutes" type="number" min="1" max="60" value="8" class="tiny">
+        </label>
+        <label data-show="titles description script">ملاحظات (اختياري)
+          <textarea id="write-notes" name="notes" rows="2" placeholder="نقط لازم تتقال، أداة معينة، الجمهور..."></textarea>
+        </label>
+        <label data-show="description chapters">الترانسكريبت
+          <textarea id="write-transcript" name="transcript" rows="6" placeholder="الصق الترانسكريبت هنا، أو ارفع ملف .srt (scribe.py بيطلّعه)"></textarea>
+        </label>
+        <div data-show="description chapters"><input type="file" id="write-file" accept=".srt,.txt,.vtt"></div>
+        <div><button class="btn primary" type="submit" id="write-go">اكتب</button></div>
+      </form>
+      <div id="write-result"></div>
+    </section>
+
+    <!-- ===== thumbnails ===== -->
+    <section class="view" id="view-thumb" hidden>
+      <header class="view-head">
+        <h1>الثمبنيل</h1>
+        <p class="muted">ارفع الثمبنيل وشوف شكله جنب فيديوهات المنافسين، واتأكد إنه مقروء وهو صغير. التقييم بالـ AI اختياري.</p>
+      </header>
+      <form class="panel" id="thumb-form" autocomplete="off">
+        <div class="row-inline wrap">
+          <label class="grow">الصورة <input type="file" id="thumb-file" accept="image/png,image/jpeg,image/webp"></label>
+          <label class="grow">العنوان <input id="thumb-title" placeholder="عنوان الفيديو"></label>
+          <label class="grow">الكلمة المستهدفة <input id="thumb-keyword" placeholder="لو حللتها قبل كده هتظهر نتايج بحثها"></label>
+        </div>
+        <div class="row-inline">
+          <button class="btn" type="button" id="thumb-preview-btn">اعرض المعاينة</button>
+          <button class="btn primary" type="button" id="thumb-review-btn">قيّمه بالـ AI</button>
+        </div>
+      </form>
+      <div class="grid two">
+        <div class="panel"><h2>وهو صغير</h2><div id="thumb-sizes" class="sizes"></div><div id="thumb-stats"></div></div>
+        <div class="panel" id="thumb-review"><h2>تقييم الـ AI</h2><p class="muted small">ارفع الصورة واضغط «قيّمه بالـ AI».</p></div>
+      </div>
+      <div class="section-head">
+        <h2>المعاينة</h2>
+        <div class="tabs" role="tablist" id="thumb-tabs">
+          <button class="tab" type="button" role="tab" data-mode="home" aria-selected="true">الصفحة الرئيسية</button>
+          <button class="tab" type="button" role="tab" data-mode="search" aria-selected="false">نتايج البحث</button>
+        </div>
+      </div>
+      <div id="thumb-preview"></div>
+    </section>
 
     <!-- ===== keywords ===== -->
     <section class="view" id="view-keywords">
@@ -89,8 +202,17 @@
           <label>التاجز (افصل بينهم بفاصلة) <span class="counter" data-for="tags">0/500</span>
             <textarea name="tags" rows="3"></textarea>
           </label>
+          <div class="row-inline wrap">
+            <button class="btn small" type="button" id="tags-sort">رتّب التاجز</button>
+            <select id="taglist-select"><option value="">قوايم التاجز المحفوظة</option></select>
+            <button class="btn small" type="button" id="taglist-add">ضيفها</button>
+            <button class="btn small" type="button" id="taglist-save">احفظ التاجز دي كقايمة</button>
+          </div>
         </form>
-        <div class="panel seo-score" id="seo-score"></div>
+        <div class="seo-side">
+          <div class="panel" id="seo-score"></div>
+          <div class="panel" id="ad-safety"></div>
+        </div>
       </div>
     </section>
 
@@ -108,6 +230,10 @@
       <div class="cards" id="comp-list"></div>
 
       <div id="comp-insights" class="view" hidden>
+      <div class="section-head"><h2>مقارنة القنوات</h2></div>
+      <p class="muted small">قناتك جنب المنافسين. الترتيب جنب كل رقم، و«زيادة المشتركين» بتظهر بعد كام يوم من التحديث.</p>
+      <div id="scorecard"></div>
+
       <div class="section-head">
         <h2>الفيديوهات اللي فرقعت (Outliers)</h2>
         <div class="filters">
@@ -160,6 +286,28 @@
             <label>الدولة <input name="region" class="tiny" placeholder="EG"></label>
             <label>اللغة <input name="lang" class="tiny" placeholder="ar"></label>
           </div>
+
+          <h2>قناتك</h2>
+          <label>لينك قناتك أو @handle <span class="pill" id="st-channel"></span>
+            <input name="my_channel" placeholder="@yourchannel">
+          </label>
+          <label>كلمات مجالك (افصل بينهم بفاصلة)
+            <input name="niche_keywords" placeholder="ذكاء اصطناعي, ChatGPT, Claude">
+          </label>
+          <label>الـ RPM بتاعك بالدولار (من YouTube Studio)
+            <input name="rpm" class="tiny" placeholder="1.5">
+          </label>
+
+          <h2>الكتابة بالـ AI</h2>
+          <label>Claude API key <span class="pill" id="st-ai"></span>
+            <input name="anthropic_api_key" type="password" placeholder="sk-ant-...">
+          </label>
+          <label>صوت القناة وقواعد الكتابة
+            <textarea name="channel_voice" rows="3" placeholder="مثلًا: عامية مصرية، أسماء الأدوات بالإنجليزي، من غير تهويل"></textarea>
+          </label>
+          <label>قواعد الثمبنيل
+            <textarea name="thumbnail_rules" rows="2" placeholder="مثلًا: 3 كلمات بالكتير، من غير وشوش، خلفية غامقة"></textarea>
+          </label>
           <p class="muted small">سيب أي خانة فاضية لو مش عاوز تغيّرها.</p>
           <button class="btn primary" type="submit">احفظ</button>
           <p class="muted small" id="settings-msg"></p>
@@ -172,6 +320,7 @@
             <li>من <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Credentials</a> اعمل <b>API key</b> وحطه هنا. ده كفاية للكلمات والمنافسين وتحليل الفيديو.</li>
             <li>عشان «قناتي»: من <a href="https://console.cloud.google.com/auth/overview" target="_blank" rel="noopener">OAuth consent screen</a> اختار External، وضيف إيميلك في <b>Test users</b>.</li>
             <li>من Credentials اعمل <b>OAuth client ID</b> نوعه <b>Desktop app</b>، وحط الـ Client ID والـ Secret هنا.</li>
+            <li>عشان الكتابة بالـ AI من الداشبورد: اعمل مفتاح من <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Claude Console</a> (بيتحاسب بالاستخدام). من Claude Code مش محتاجه.</li>
           </ol>
           <p class="muted small">لو الـ consent screen فاضل في وضع Testing، جوجل بتطلب منك تربط القناة تاني كل 7 أيام. عشان تتجنب ده اعمل Publish للتطبيق (هيطلعلك تحذير إن التطبيق مش متراجع، وده عادي لأنه تطبيقك إنت).</p>
         </div>
@@ -180,6 +329,10 @@
   </main>
 </div>
 <div class="toast" id="toast" hidden></div>
-<script src="/static/app.js?v=5"></script>
+<script src="/static/app.js?v=8"></script>
+<script src="/static/ideas.js?v=8"></script>
+<script src="/static/write.js?v=8"></script>
+<script src="/static/thumb.js?v=8"></script>
+<script src="/static/channel.js?v=8"></script>
 </body>
 </html>

@@ -34,6 +34,10 @@ def error_message(response):
         return "خلصت الـ quota بتاعة النهارده (10,000 وحدة). بتتجدد حوالي الساعة 10 الصبح بتوقيت مصر."
     if reason in ("keyInvalid",) or "API key not valid" in message:
         return "الـ YouTube API key مش صح. راجعه من صفحة الإعدادات."
+    if reason == "commentsDisabled":
+        return "الكومنتات مقفولة على الفيديو ده."
+    if reason in ("videoNotFound", "notFound"):
+        return "مش لاقي ده على يوتيوب. اتأكد من اللينك."
     if reason == "accessNotConfigured" or "has not been used in project" in message:
         return "الـ API مش متفعّل في مشروع Google Cloud بتاعك. فعّل YouTube Data API v3 و YouTube Analytics API."
     if reason == "forbidden" or response.status_code == 403:

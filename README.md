@@ -10,11 +10,16 @@ A free, open-source alternative to vidIQ and TubeBuddy that runs on your own com
 
 | الصفحة | بتعمل إيه | التكلفة من الـ quota |
 | --- | --- | --- |
+| الأفكار | تنبيهات لما منافس ينزّل فيديو أو فيديو يفرقع أو حاجة في مجالك تدخل الترند، وأفكار يومية بالـ AI، ومخطط للفيديوهات الجاية، والترند في بلدك | حوالي 3 لكل منافس في الساعة وهو مفتوح |
 | الكلمات المفتاحية | اقتراحات البحث وإنت بتكتب، وتقييم للطلب والمنافسة، والتاجز الأكتر استخدامًا، وأول 25 نتيجة | الاقتراحات مجانية، والتحليل حوالي 102 |
-| تحليل فيديو | تاجز أي فيديو، وأداءه مقارنة بقناته، وتقييم SEO | حوالي 4 |
-| SEO | فحص العنوان والوصف والتاجز وإنت بتكتب | مجاني |
-| المنافسين | متابعة قنوات، والفيديوهات اللي فرقعت (Outliers)، وأحسن وقت للنشر | حوالي 3 لكل قناة كل 12 ساعة |
-| قناتي | أرقامك الحقيقية: الكلمات اللي الناس بحثت بيها ووصلتلك، ومصادر المشاهدات، وأداء الفيديوهات، والجمهور | quota منفصلة ومش بتخلص عمليًا |
+| الكتابة بالـ AI | عناوين، ووصف وتاجز، وسكريبت، و Chapters من الترانسكريبت، بصوت قناتك | مجاني من الـ quota (بيتحاسب على Claude API) |
+| الثمبنيل | معاينة الثمبنيل بأحجامه الحقيقية وجنب فيديوهات المنافسين، وفحص التباين، وتقييم بالـ AI | مجاني |
+| SEO | فحص العنوان والوصف والتاجز وإنت بتكتب، وترتيب التاجز وقوايم محفوظة، وفحص الكلمات اللي بتقلل الإعلانات | مجاني |
+| تحليل فيديو | تاجز أي فيديو، وأداءه مقارنة بقناته، وتقييم SEO، وتحليل الكومنتات، والاحتفاظ (لفيديوهاتك) | حوالي 4، والكومنتات حوالي 3 |
+| المنافسين | مقارنة قناتك بالمنافسين، والفيديوهات اللي فرقعت مع المشاهدات في الساعة، وأحسن وقت للنشر | حوالي 3 لكل قناة |
+| قناتي | آخر فيديوهاتك ومشاهداتها في الساعة، وفحص صحة القناة، والأهداف، والأرباح التقديرية، ونسخة احتياطية. وبعد الربط: الكلمات اللي الناس بحثت بيها ووصلتلك، ومصادر المشاهدات، والجمهور | قليلة، و Analytics ليها quota منفصلة |
+
+الكتابة بالـ AI من الداشبورد محتاجة Claude API key. من Claude Code مش محتاجاه: Claude بيكتب بنفسه وبيستخدم أدوات البرنامج.
 
 الـ quota المجانية من جوجل 10,000 وحدة في اليوم، يعني حوالي 90 تحليل كلمة في اليوم. بتتجدد حوالي الساعة 10 الصبح بتوقيت مصر.
 
@@ -68,6 +73,10 @@ A local dashboard for YouTube creators. The interface is in Arabic.
 
 **Features**
 
+- **Ideas & alerts:** background checks every hour (while the dashboard runs) for new competitor uploads, competitor videos taking off, and niche videos entering trending; AI daily ideas; a video planner board; trending videos for your region.
+- **AI writing** (Claude API key, or free from Claude Code): titles ranked by an SEO check, description + tags, script outline, chapters from an `.srt` transcript.
+- **Thumbnails:** preview at real sizes and next to competitors' videos, contrast/brightness checks, AI review.
+- **Channel insights:** recent videos with views per hour, channel audit, milestones with ETA, earnings estimate, scorecard vs competitors, retention curve (OAuth), comment insights, ad-safety word check, full metadata backup (JSON + CSV).
 - **Keyword research:** live YouTube autocomplete, a 0–100 score for demand vs. competition, most-used tags, and the top 25 results with views/day and views-to-subscribers ratio.
 - **Video analyzer:** any video's tags, its performance against its channel's usual, engagement, and an SEO checklist.
 - **SEO checker:** scores your title, description and tags as you type.

@@ -38,6 +38,19 @@ def tz():
     return ZoneInfo(get("TIMEZONE", "Africa/Cairo"))
 
 
+def niche_keywords():
+    """Words that describe your niche (comma separated), used to filter trends and raise alerts."""
+    return [w.strip() for w in get("NICHE_KEYWORDS").replace("،", ",").split(",") if w.strip()]
+
+
+def rpm():
+    """Your estimated revenue per 1,000 views in USD (check YouTube Studio for the real number)."""
+    try:
+        return float(get("RPM", "1.5"))
+    except ValueError:
+        return 1.5
+
+
 def save(updates):
     """Write the given keys into .env, keeping every other line as it is."""
     lines = ENV_FILE.read_text(encoding="utf-8").splitlines() if ENV_FILE.exists() else []

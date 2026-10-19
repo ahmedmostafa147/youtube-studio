@@ -79,6 +79,9 @@ async function loadStatus() {
   $('#quota-bar').style.width = Math.min(100, (used / limit) * 100) + '%';
   $('#quota .bar').classList.toggle('warn', used / limit > 0.85);
   $('#setup-banner').hidden = status.has_key || location.hash === '#settings';
+  const badge = $('#alert-count');
+  badge.textContent = status.unread_alerts;
+  badge.hidden = !status.unread_alerts;
 }
 
 // ---------- shared renderers ----------
@@ -105,6 +108,7 @@ const COLUMNS = {
   ratio: { h: 'مشاهدات ÷ مشتركين', cell: (v) => ratioBadge(v.outlier) },
   outlier: { h: 'مقارنة بالمعتاد', cell: (v) => ratioBadge(v.outlier) },
   match: { h: 'الكلمة في العنوان', cell: (v) => (v.title_match ? '<span class="yes">✓</span>' : '<span class="no">—</span>') },
+  vph: { h: 'مشاهدة/ساعة', cell: (v) => (v.vph == null ? '<span class="muted small">—</span>' : num(v.vph)) },
   growth: { h: 'زيادة/يوم', cell: (v) => (v.growth_per_day == null ? '<span class="muted small">بعد تحديث بكرة</span>' : num(v.growth_per_day)) },
 };
 
@@ -161,10 +165,11 @@ function renderSeo(seo) {
 }
 
 // ---------- router ----------
-const VIEWS = ['keywords', 'video', 'seo', 'competitors', 'me', 'settings'];
+const VIEWS = ['ideas', 'keywords', 'write', 'thumb', 'seo', 'video', 'competitors', 'me', 'settings'];
+// Pages in other files (ideas.js, write.js, thumb.js, channel.js) register their own entries.
 const onEnter = {
   competitors: () => loadCompetitors(),
-  me: () => loadMe(),
+  seo: () => loadTagLists(),
   settings: () => fillSettings(),
 };
 
@@ -250,6 +255,10 @@ function renderKeyword(d) {
       ${statCard('قنوات صغيرة في أول 10', `<span class="num">${st.small_channels}</span>`, 'أقل من 10K مشترك')}
     </div>
     ${d.notes.length ? `<div class="panel"><ul class="notes">${d.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul></div>` : ''}
+    <div class="row-inline wrap">
+      <button class="btn small" data-plan-kw="${esc(d.keyword)}">ضيفها لمخطط الفيديوهات</button>
+      <button class="btn small" data-write-kw="${esc(d.keyword)}">اكتب عناوين ليها بالـ AI</button>
+    </div>
     <div class="grid two">
       <div class="panel">
         <div class="panel-head"><h2>كلمات قريبة</h2><button class="btn small" data-explore="${esc(d.keyword)}">وسّع الاقتراحات</button></div>
@@ -271,6 +280,15 @@ function renderKeyword(d) {
 $('#kw-result').addEventListener('click', async (e) => {
   const chip = e.target.closest('[data-analyze]');
   if (chip) return analyzeKeyword(chip.dataset.analyze);
+  const plan = e.target.closest('[data-plan-kw]');
+  if (plan) {
+    await api('/api/ideas', { method: 'POST', body: { title: plan.dataset.planKw, keyword: plan.dataset.planKw, source: 'keyword' } });
+    plan.disabled = true;
+    plan.textContent = 'اتضافت للمخطط';
+    return;
+  }
+  const write = e.target.closest('[data-write-kw]');
+  if (write) return openWriter({ topic: write.dataset.writeKw, keyword: write.dataset.writeKw });
   const ex = e.target.closest('[data-explore]');
   if (ex) {
     const box = $('.explore', ex.closest('.panel'));
@@ -319,9 +337,14 @@ function renderVideo(v) {
           ${statCard('مقارنة بالمعتاد للقناة', ratioBadge(v.outlier), `المعتاد ${fmt(ch.median_views)} مشاهدة`)}
           ${statCard('التفاعل', `<span class="num">${v.engagement}%</span>`, `${fmt(v.likes)} لايك · ${fmt(v.comments)} كومنت`)}
         </div>
-        <div><button class="btn small" id="video-to-seo">افتحه في SEO</button></div>
+        <div class="row-inline wrap">
+          <button class="btn small" id="video-to-seo">افتحه في SEO</button>
+          <button class="btn small" id="video-comments">حلل الكومنتات</button>
+          <button class="btn small" id="video-retention" title="لفيديوهات قناتك بس، ومحتاج تربط القناة">الناس بتمشي فين؟</button>
+        </div>
       </div>
     </div>
+    <div id="video-extra"></div>
     <div class="grid two">
       <div class="panel">
         <div class="panel-head"><h2>التاجز (${v.tags.length})</h2>${v.tags.length ? `<button class="btn small" data-copy="${esc(tagsText)}">انسخ الكل</button>` : ''}</div>
@@ -332,12 +355,89 @@ function renderVideo(v) {
     </div>`;
 }
 
-$('#video-result').addEventListener('click', (e) => {
-  if (e.target.id !== 'video-to-seo') return;
+$('#video-result').addEventListener('click', async (e) => {
   const v = $('#video-result')._video;
-  fillSeoForm(v, $('#video-keyword').value);
-  location.hash = '#seo';
+  if (e.target.id === 'video-to-seo') {
+    fillSeoForm(v, $('#video-keyword').value);
+    location.hash = '#seo';
+  } else if (e.target.id === 'video-comments') {
+    const box = $('#video-extra');
+    box.innerHTML = loading('بيقرا الكومنتات');
+    try {
+      box.innerHTML = renderComments(await api(`/api/comments?url=${v.id}&ai=${status.has_ai ? 1 : 0}`));
+    } catch (err) { box.innerHTML = errorBox(err.message); }
+  } else if (e.target.id === 'video-retention') {
+    const box = $('#video-extra');
+    box.innerHTML = loading();
+    try {
+      box.innerHTML = renderRetention(await api(`/api/retention?url=${v.id}`));
+    } catch (err) {
+      box.innerHTML = errorBox(err.message) + (err.auth ? '<p><a class="btn primary" href="/auth/login">اربط قناتك</a></p>' : '');
+    }
+  }
 });
+
+function commentList(rows) {
+  if (!rows.length) return '<p class="muted small">مفيش.</p>';
+  return `<div class="notes">${rows.map((c) => `<div class="idea"><span>${esc(c.text.slice(0, 280))}</span><span class="muted small">${esc(c.author)} · ${fmt(c.likes)} لايك</span></div>`).join('')}</div>`;
+}
+
+function renderComments(d) {
+  const a = d.ai;
+  const aiPanel = a ? `
+    <div class="panel">
+      <div class="panel-head"><h2>ملخص الـ AI</h2><span class="usage num">$${a.usage.cost_usd}</span></div>
+      <p>${esc(a.summary)}</p>
+      <div class="muted small">إيجابي ${a.sentiment.positive}% · محايد ${a.sentiment.neutral}% · سلبي ${a.sentiment.negative}%</div>
+      ${a.video_ideas.length ? `<h3>أفكار فيديوهات من الكومنتات</h3><ul class="notes">${a.video_ideas.map((i) => `<li>${esc(i)}</li>`).join('')}</ul>` : ''}
+      ${a.requests.length ? `<h3>طلبات المشاهدين</h3><ul class="notes">${a.requests.map((i) => `<li>${esc(i)}</li>`).join('')}</ul>` : ''}
+    </div>` : '<p class="muted small">حط Claude API key في الإعدادات عشان يطلعلك ملخص وأفكار من الكومنتات.</p>';
+  return `
+    <div class="section-head"><h2>الكومنتات (${d.count})</h2></div>
+    ${aiPanel}
+    <div class="grid two">
+      <div class="panel"><h3>أكتر الكلمات</h3><div class="chips">${d.words.map((w) => `<span class="chip">${esc(w.word)}<span class="count num">${w.count}</span></span>`).join('')}</div></div>
+      <div class="panel"><h3>طلبات (اعمل، ياريت، عايزين...)</h3>${commentList(d.requests)}</div>
+      <div class="panel"><h3>أسئلة</h3>${commentList(d.questions)}</div>
+      <div class="panel"><h3>الأكتر لايكات</h3>${commentList(d.top)}</div>
+    </div>`;
+}
+
+function retentionChart(points, duration) {
+  if (points.length < 2) return '';
+  const W = 800, H = 220, P = { t: 12, r: 12, b: 26, l: 44 };
+  const max = Math.max(100, ...points.map((p) => p.pct));
+  const x = (t) => P.l + (t / (duration || 1)) * (W - P.l - P.r);
+  const y = (v) => H - P.b - (v / max) * (H - P.t - P.b);
+  const line = points.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(p.pct).toFixed(1)}`).join('');
+  const area = `${line}L${x(points[points.length - 1].t)},${H - P.b}L${x(points[0].t)},${H - P.b}Z`;
+  const ticks = [0, Math.round(duration / 2), duration];
+  const mmss = (t) => `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" dir="ltr" role="img" aria-label="نسبة المشاهدين على مدار الفيديو">
+    <line x1="${P.l}" x2="${W - P.r}" y1="${y(50)}" y2="${y(50)}" stroke="var(--line)" stroke-dasharray="3 4"/>
+    <line x1="${P.l}" x2="${W - P.r}" y1="${H - P.b}" y2="${H - P.b}" stroke="var(--line)"/>
+    <path d="${area}" fill="var(--champagne-veil)"/>
+    <path d="${line}" fill="none" stroke="var(--champagne)" stroke-width="2" stroke-linejoin="round"/>
+    <text x="${P.l - 8}" y="${y(100) + 4}" text-anchor="end">100%</text>
+    <text x="${P.l - 8}" y="${y(50) + 4}" text-anchor="end">50%</text>
+    ${ticks.map((t) => `<text x="${x(t)}" y="${H - 6}" text-anchor="middle">${mmss(t)}</text>`).join('')}
+  </svg>`;
+}
+
+function renderRetention(r) {
+  const mmss = (t) => `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+  return `
+    <div class="section-head"><h2>الاحتفاظ: الناس بتمشي فين؟</h2></div>
+    <div class="grid kpis">
+      ${statCard('بعد 30 ثانية', `<span class="num">${r.at_30s}%</span>`)}
+      ${statCard('في نص الفيديو', `<span class="num">${r.at_half}%</span>`)}
+      ${statCard('المتوسط', `<span class="num">${r.average}%</span>`)}
+      ${statCard('مقارنة بفيديوهات يوتيوب بنفس الطول', `<span class="num">×${r.relative_avg}</span>`, '×1 = المتوسط')}
+    </div>
+    <div class="panel">${retentionChart(r.points, r.video.duration)}
+      ${r.biggest_drops.length ? `<h3>أكبر نزول</h3><ul class="notes">${r.biggest_drops.map((d) => `<li>من <span class="num">${mmss(d.from)}</span> لـ <span class="num">${mmss(d.to)}</span>: نزل <span class="num">${d.drop}%</span> من المشاهدين. شوف إيه اللي بيتقال هناك.</li>`).join('')}</ul>` : ''}
+    </div>`;
+}
 
 // ---------- SEO ----------
 const seoForm = $('#seo-form');
@@ -363,12 +463,26 @@ function updateCounters(counts) {
 }
 
 const scoreSeo = debounce(async () => {
+  const values = seoValues();
   try {
-    const res = await api('/api/seo', { method: 'POST', body: seoValues() });
+    const res = await api('/api/seo', { method: 'POST', body: values });
     $('#seo-score').innerHTML = renderSeo(res);
     updateCounters(res.counts);
+    $('#ad-safety').innerHTML = renderAdSafety(await api('/api/ad-safety', { method: 'POST', body: values }));
   } catch (err) { $('#seo-score').innerHTML = errorBox(err.message); }
 }, 300);
+
+const RISK = { none: 'مفيش مشكلة', low: 'خطر قليل', medium: 'راجعها', high: 'غيّرها' };
+
+function renderAdSafety(r) {
+  return `
+    <div class="panel-head"><h2>أمان الإعلانات</h2><span class="risk ${r.risk}">${RISK[r.risk]}</span></div>
+    ${r.hits.length ? `<div class="checks">${r.hits.map((h) => `
+      <div class="check ${r.risk === 'high' && h.field === 'العنوان' ? 'fail' : 'warn'}"><span class="mark"></span>
+        <span>«${esc(h.word)}» في ${esc(h.field)}</span><span class="tip">${esc(h.category)}</span></div>`).join('')}</div>
+      <p class="muted small">${esc(r.note)}</p>`
+      : '<p class="muted small">مفيش كلمات معروف إنها بتقلل الإعلانات.</p>'}`;
+}
 
 seoForm.addEventListener('input', scoreSeo);
 
@@ -389,7 +503,64 @@ $('#seo-load').addEventListener('click', (e) => busy(e.target, async () => {
   } catch (err) { toast(err.message); }
 }));
 
+let tagLists = [];
+
+async function loadTagLists() {
+  try { tagLists = await api('/api/taglists'); } catch { return; }
+  $('#taglist-select').innerHTML = '<option value="">قوايم التاجز المحفوظة</option>'
+    + tagLists.map((l) => `<option value="${esc(l.name)}">${esc(l.name)} (${l.tags.length})</option>`).join('');
+}
+
+function setTags(tags) {
+  seoForm.tags.value = tags.join(', ');
+  scoreSeo();
+}
+
+$('#tags-sort').addEventListener('click', async () => {
+  const { tags, keyword } = seoValues();
+  setTags(await api('/api/tags/sort', { method: 'POST', body: { tags, keyword } }));
+  toast('اترتبت: الكلمة المستهدفة الأول');
+});
+
+$('#taglist-add').addEventListener('click', () => {
+  const list = tagLists.find((l) => l.name === $('#taglist-select').value);
+  if (!list) return toast('اختار قايمة الأول');
+  setTags([...seoValues().tags, ...list.tags]);
+});
+
+$('#taglist-save').addEventListener('click', async () => {
+  const { tags } = seoValues();
+  if (!tags.length) return toast('مفيش تاجز تتحفظ');
+  const name = $('#taglist-select').value || `قايمة ${new Date().toLocaleDateString('en-GB')}`;
+  tagLists = await api('/api/taglists', { method: 'POST', body: { name, tags } });
+  await loadTagLists();
+  $('#taglist-select').value = name;
+  toast(`اتحفظت في «${name}»`);
+});
+
 // ---------- competitors ----------
+async function loadScorecard() {
+  const box = $('#scorecard');
+  try {
+    const { rows, has_me } = await api('/api/scorecard');
+    const cell = (r, key, val) => `${val}${r.ranks?.[key] ? `<span class="rank num">#${r.ranks[key]}</span>` : ''}`;
+    box.innerHTML = (has_me ? '' : '<p class="muted small">حط لينك قناتك في الإعدادات عشان تظهر في المقارنة.</p>') + `
+      <div class="table-wrap"><table>
+        <thead><tr><th>القناة</th><th>المشتركين</th><th>زيادة المشتركين</th><th>المعتاد للفيديو</th><th>فيديوهات آخر 30 يوم</th><th>التفاعل</th><th>مشاهدات ÷ مشتركين</th><th>فرقعات آخر 90 يوم</th></tr></thead>
+        <tbody>${rows.map((r) => `<tr class="${r.is_me ? 'me' : ''}">
+          <td><div class="vid"><img src="${esc(r.thumbnail)}" alt="" style="width:32px;height:32px;border-radius:50%"><div class="t">${esc(r.title)}${r.is_me ? ' (إنت)' : ''}</div></div></td>
+          <td>${cell(r, 'subs', num(r.subs))}</td>
+          <td>${r.subs_growth == null ? '<span class="muted small">بعد كام يوم</span>' : cell(r, 'subs_growth', `<span class="num">${r.subs_growth >= 0 ? '+' : ''}${fmt(r.subs_growth)}</span>`)}</td>
+          <td>${cell(r, 'median_views', num(r.median_views))}</td>
+          <td>${cell(r, 'uploads_30d', `<span class="num">${r.uploads_30d}</span>`)}</td>
+          <td>${cell(r, 'engagement', `<span class="num">${r.engagement}%</span>`)}</td>
+          <td>${r.views_per_sub == null ? '—' : cell(r, 'views_per_sub', `<span class="num">${r.views_per_sub}</span>`)}</td>
+          <td>${cell(r, 'outliers_90d', `<span class="num">${r.outliers_90d}</span>`)}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>`;
+  } catch (err) { box.innerHTML = errorBox(err.message); }
+}
+
 async function loadCompetitors() {
   const box = $('#comp-list');
   try {
@@ -409,7 +580,7 @@ async function loadCompetitors() {
     select.innerHTML = '<option value="">كل القنوات</option>' + list.map((c) => `<option value="${esc(c.channel_id)}">${esc(c.title)}</option>`).join('');
     select.value = current;
     $('#comp-insights').hidden = !list.length;
-    if (list.length) { loadOutliers(); loadTiming(); }
+    if (list.length) { loadScorecard(); loadOutliers(); loadTiming(); }
   } catch (err) { box.innerHTML = errorBox(err.message); }
 }
 
@@ -418,7 +589,7 @@ async function loadOutliers() {
   const q = new URLSearchParams({ days: $('#out-days').value, format: $('#out-format').value, channel: $('#out-channel').value });
   try {
     const rows = await api(`/api/outliers?${q}`);
-    box.innerHTML = rows.length ? table(rows, ['video', 'outlier', 'views', 'vpd', 'growth', 'age']) : empty('مفيش فيديوهات في الفترة دي.');
+    box.innerHTML = rows.length ? table(rows, ['video', 'outlier', 'views', 'vph', 'vpd', 'growth', 'age']) : empty('مفيش فيديوهات في الفترة دي.');
   } catch (err) { box.innerHTML = errorBox(err.message); }
 }
 
@@ -471,172 +642,22 @@ $('#comp-list').addEventListener('click', async (e) => {
 
 ['#out-days', '#out-format', '#out-channel'].forEach((s) => $(s).addEventListener('change', loadOutliers));
 
-// ---------- my channel ----------
-const meRoot = $('#me-root');
-let meDays = 28;
-let meLoaded = false;
-
-function connectPanel(message = '') {
-  const steps = status.has_client
-    ? `<p>اربط قناتك عشان تشوف أرقامها الحقيقية: الكلمات اللي الناس بحثت بيها ووصلتلك، مصادر المشاهدات، وأداء كل فيديو.</p>
-       <p class="muted small">الصلاحية قراءة بس. البرنامج مش بيقدر يعدّل أو ينشر حاجة على قناتك.</p>
-       <div><a class="btn primary" href="/auth/login">اربط قناتك</a></div>`
-    : `<p>عشان تربط قناتك محتاج <b>OAuth Client ID</b> و <b>Client Secret</b>.</p>
-       <div><a class="btn primary" href="#settings">روح للإعدادات</a></div>`;
-  return `<header class="view-head"><h1>قناتي</h1></header>
-    ${message ? errorBox(message) : ''}
-    <div class="panel">${steps}</div>`;
-}
-
-async function loadMe(force = false) {
-  if (meLoaded && !force) return;
-  await loadStatus();
-  if (!status.has_client || !status.connected) { meRoot.innerHTML = connectPanel(); return; }
-  meRoot.innerHTML = loading();
-  let me;
-  try { me = await api('/api/me'); } catch (err) {
-    meRoot.innerHTML = err.auth ? connectPanel(err.message) : errorBox(err.message);
-    return;
-  }
-  meLoaded = true;
-  meRoot.innerHTML = `
-    <div class="me-head">
-      <img src="${esc(me.thumbnail)}" alt="">
-      <div class="grow"><h1>${esc(me.title)}</h1>
-        <div class="muted small">${num(me.subs)} مشترك · ${num(me.view_count)} مشاهدة · ${plural(me.video_count, 'فيديو', 'فيديوهات')}</div></div>
-      <select id="me-days">
-        ${[7, 28, 90, 365].map((d) => `<option value="${d}" ${d === meDays ? 'selected' : ''}>آخر ${d} يوم</option>`).join('')}
-      </select>
-      <button class="btn ghost" id="me-logout">افصل القناة</button>
-    </div>
-    <div id="me-overview">${loading()}</div>
-    <div class="grid two">
-      <div class="panel"><div class="panel-head"><h2>الناس بحثت عن إيه ووصلتلك</h2></div>
-        <p class="muted small">دي الكلمات الحقيقية من بحث يوتيوب. اضغط «حلل» عشان تشوف فرصتها.</p>
-        <div id="me-terms">${loading()}</div></div>
-      <div class="panel"><h2>المشاهدات جاية منين</h2><div id="me-traffic">${loading()}</div></div>
-    </div>
-    <div class="section-head"><h2>أداء الفيديوهات في الفترة دي</h2></div>
-    <div id="me-videos">${loading()}</div>
-    <div class="section-head"><h2>الجمهور</h2></div>
-    <div id="me-audience">${loading()}</div>`;
-  $('#me-days').addEventListener('change', (e) => { meDays = +e.target.value; loadMeSections(); });
-  $('#me-logout').addEventListener('click', async () => {
-    if (!confirm('تفصل القناة من البرنامج؟')) return;
-    await api('/auth/logout', { method: 'POST' });
-    meLoaded = false;
-    loadMe(true);
-  });
-  loadMeSections();
-}
-
-function section(id, path, render) {
-  const box = $(id);
-  box.innerHTML = loading();
-  api(`${path}?days=${meDays}`)
-    .then((data) => { box.innerHTML = render(data); })
-    .catch((err) => {
-      box.innerHTML = errorBox(err.message) + (err.auth ? '<p><a class="btn primary" href="/auth/login">اربط القناة تاني</a></p>' : '');
-    });
-}
-
-function delta(cur, prev) {
-  if (!prev) return '';
-  const d = ((cur - prev) / prev) * 100;
-  return `<span class="delta ${d >= 0 ? 'up' : 'down'} num">${d >= 0 ? '+' : ''}${d.toFixed(0)}%</span> عن الفترة اللي قبلها`;
-}
-
-function lineChart(points) {
-  if (points.length < 2) return '';
-  const W = 800, H = 220, P = { t: 12, r: 12, b: 26, l: 44 };
-  const max = Math.max(...points.map((p) => p.value), 1);
-  const x = (i) => P.l + (i / (points.length - 1)) * (W - P.l - P.r);
-  const y = (v) => H - P.b - (v / max) * (H - P.t - P.b);
-  const line = points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.value).toFixed(1)}`).join('');
-  const area = `${line}L${x(points.length - 1)},${H - P.b}L${x(0)},${H - P.b}Z`;
-  const ticks = [0, Math.floor((points.length - 1) / 2), points.length - 1];
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}" dir="ltr" role="img" aria-label="المشاهدات اليومية">
-    <line x1="${P.l}" x2="${W - P.r}" y1="${y(max)}" y2="${y(max)}" stroke="var(--line)" stroke-dasharray="3 4"/>
-    <line x1="${P.l}" x2="${W - P.r}" y1="${H - P.b}" y2="${H - P.b}" stroke="var(--line)"/>
-    <path d="${area}" fill="var(--champagne-veil)"/>
-    <path d="${line}" fill="none" stroke="var(--champagne)" stroke-width="2" stroke-linejoin="round"/>
-    <text x="${P.l - 8}" y="${y(max) + 4}" text-anchor="end">${fmt(max)}</text>
-    <text x="${P.l - 8}" y="${H - P.b + 4}" text-anchor="end">0</text>
-    ${ticks.map((i) => `<text x="${x(i)}" y="${H - 6}" text-anchor="middle">${points[i].label}</text>`).join('')}
-  </svg>`;
-}
-
-function loadMeSections() {
-  section('#me-overview', '/api/me/overview', (o) => {
-    const c = o.current, p = o.previous;
-    const net = (r) => (r.subscribersGained || 0) - (r.subscribersLost || 0);
-    return `
-      <p class="muted small">من ${o.start} لـ ${o.end}. أرقام يوتيوب بتتأخر حوالي يومين.</p>
-      <div class="grid kpis">
-        ${statCard('المشاهدات', num(c.views), delta(c.views, p.views))}
-        ${statCard('ساعات المشاهدة', num((c.estimatedMinutesWatched || 0) / 60), delta(c.estimatedMinutesWatched, p.estimatedMinutesWatched))}
-        ${statCard('صافي المشتركين', `<span class="num">${net(c) >= 0 ? '+' : ''}${fmt(net(c))}</span>`, delta(net(c), net(p)))}
-        ${statCard('متوسط مدة المشاهدة', clock(c.averageViewDuration), delta(c.averageViewDuration, p.averageViewDuration))}
-        ${statCard('متوسط نسبة المشاهدة', `<span class="num">${(c.averageViewPercentage || 0).toFixed(1)}%</span>`)}
-      </div>
-      <div class="panel"><h3 class="muted">المشاهدات اليومية</h3>${lineChart(o.daily.map((d) => ({ label: d.day.slice(5), value: d.views })))}</div>`;
-  });
-
-  section('#me-terms', '/api/me/search-terms', (rows) => rows.length ? table(rows, [
-    { h: 'الكلمة', cell: (r) => esc(r.insightTrafficSourceDetail) },
-    { h: 'المشاهدات', cell: (r) => num(r.views) },
-    { h: '', cell: (r) => `<button class="btn small" data-analyze-term="${esc(r.insightTrafficSourceDetail)}">حلل</button>` },
-  ]) : empty('مفيش مشاهدات من البحث في الفترة دي.'));
-
-  section('#me-traffic', '/api/me/traffic', (rows) => {
-    const total = rows.reduce((s, r) => s + r.views, 0) || 1;
-    return rows.length ? bars(rows.map((r) => ({ label: r.label, value: r.views, text: `${((r.views / total) * 100).toFixed(0)}%` })), { best: false }) : empty('مفيش داتا.');
-  });
-
-  section('#me-videos', '/api/me/videos', (rows) => rows.length ? table(rows, [
-    'video', 'views',
-    { h: 'ساعات المشاهدة', cell: (r) => num(r.estimatedMinutesWatched / 60) },
-    { h: 'متوسط المدة', cell: (r) => clock(r.averageViewDuration) },
-    { h: 'نسبة المشاهدة', cell: (r) => `<span class="num">${r.averageViewPercentage.toFixed(0)}%</span>` },
-    { h: 'مشتركين جداد', cell: (r) => num(r.subscribersGained) },
-  ]) : empty('مفيش مشاهدات في الفترة دي.'));
-
-  section('#me-audience', '/api/me/audience', (a) => {
-    const byAge = {}, byGender = {};
-    for (const r of a.demographics) {
-      const age = r.ageGroup.replace('age', '').replace('-', '–');
-      byAge[age] = (byAge[age] || 0) + r.viewerPercentage;
-      byGender[r.gender] = (byGender[r.gender] || 0) + r.viewerPercentage;
-    }
-    const genderLabel = { male: 'رجالة', female: 'ستات', user_specified: 'محدد من المستخدم' };
-    const totalViews = a.countries.reduce((s, r) => s + r.views, 0) || 1;
-    return `<div class="grid two">
-      <div class="panel"><h3>أكتر الدول</h3>${a.countries.length ? bars(a.countries.map((r) => {
-        let name = r.country;
-        try { name = regionNames.of(r.country); } catch { /* unknown code */ }
-        return { label: name, value: r.views, text: `${fmt(r.views)}` };
-      }), { best: false }) : empty('مفيش داتا.')}<p class="muted small">النسب من أول 10 دول بس (${fmt(totalViews)} مشاهدة).</p></div>
-      <div class="panel"><h3>السن والنوع</h3>${Object.keys(byAge).length
-        ? bars(Object.entries(byAge).map(([k, v]) => ({ label: k, value: v, text: `${v.toFixed(0)}%` })), { best: false })
-          + bars(Object.entries(byGender).map(([k, v]) => ({ label: genderLabel[k] || k, value: v, text: `${v.toFixed(0)}%` })), { best: false })
-        : empty('يوتيوب مش بيعرض السن والنوع غير لما يبقى فيه مشاهدات كفاية.')}</div>
-    </div>`;
-  });
-}
-
-meRoot.addEventListener('click', (e) => {
-  const btn = e.target.closest('[data-analyze-term]');
-  if (btn) analyzeKeyword(btn.dataset.analyzeTerm);
-});
-
 // ---------- settings ----------
 function fillSettings() {
   loadStatus().then(() => {
     const pill = (el, ok) => { el.textContent = ok ? 'متسجل' : 'مش موجود'; el.classList.toggle('ok', ok); };
+    const form = $('#settings-form');
     pill($('#st-key'), status.has_key);
     pill($('#st-client'), status.has_client);
-    $('#settings-form').region.placeholder = status.region;
-    $('#settings-form').lang.placeholder = status.lang;
+    pill($('#st-ai'), status.has_ai);
+    $('#st-channel').textContent = status.my_channel.title || 'مش متحددة';
+    $('#st-channel').classList.toggle('ok', !!status.my_channel.id);
+    form.region.placeholder = status.region;
+    form.lang.placeholder = status.lang;
+    form.rpm.placeholder = status.rpm;
+    form.niche_keywords.value = status.niche_keywords || '';
+    form.channel_voice.value = status.channel_voice || '';
+    form.thumbnail_rules.value = status.thumbnail_rules || '';
   });
 }
 
@@ -647,7 +668,7 @@ $('#settings-form').addEventListener('submit', async (e) => {
   await busy($('button[type=submit]', form), async () => {
     try {
       await api('/api/settings', { method: 'POST', body });
-      $$('input', form).forEach((i) => { i.value = ''; });
+      $$('input', form).forEach((i) => { if (i.name !== 'niche_keywords') i.value = ''; });
       toast('اتحفظ');
       meLoaded = false;
       fillSettings();
