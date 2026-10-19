@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nuqta Studio</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2312100E'/%3E%3Crect x='10' y='10' width='12' height='12' fill='%23D8BF8F' transform='rotate(45 16 16)'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Alexandria:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css?v=5">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand"><span class="nuqta"></span><span>Studio</span></div>
+    <nav>
+      <a href="#keywords" data-view="keywords">الكلمات المفتاحية</a>
+      <a href="#video" data-view="video">تحليل فيديو</a>
+      <a href="#seo" data-view="seo">SEO</a>
+      <a href="#competitors" data-view="competitors">المنافسين</a>
+      <a href="#me" data-view="me">قناتي</a>
+      <a href="#settings" data-view="settings">الإعدادات</a>
+    </nav>
+    <div class="quota" id="quota" title="YouTube Data API: 10,000 وحدة في اليوم مجانًا">
+      <div class="quota-label"><span>الـ quota النهارده</span><span id="quota-text">—</span></div>
+      <div class="bar"><span id="quota-bar"></span></div>
+    </div>
+  </aside>
+
+  <main>
+    <div class="banner" id="setup-banner" hidden>
+      <span class="nuqta small"></span>
+      <span>محتاج YouTube API key عشان التحليل يشتغل.</span>
+      <a href="#settings">حطه من الإعدادات</a>
+    </div>
+
+    <!-- ===== keywords ===== -->
+    <section class="view" id="view-keywords">
+      <header class="view-head">
+        <h1>الكلمات المفتاحية</h1>
+        <p class="muted">اكتب الموضوع زي ما المشاهد هيكتبه في البحث. التحليل بياخد حوالي 102 وحدة من الـ quota، والاقتراحات مجانية.</p>
+      </header>
+      <form class="searchbar" id="kw-form" autocomplete="off">
+        <div class="field-wrap">
+          <input id="kw-input" placeholder="مثلًا: شرح ChatGPT للمبتدئين">
+          <ul class="dropdown" id="kw-dropdown" hidden></ul>
+        </div>
+        <button class="btn primary" type="submit">حلل</button>
+      </form>
+      <div id="kw-result"></div>
+    </section>
+
+    <!-- ===== single video ===== -->
+    <section class="view" id="view-video" hidden>
+      <header class="view-head">
+        <h1>تحليل فيديو</h1>
+        <p class="muted">حط لينك أي فيديو: هتشوف التاجز بتاعته، وأداءه مقارنة بباقي فيديوهات قناته، وتقييم الـ SEO. (حوالي 4 وحدات)</p>
+      </header>
+      <form class="searchbar" id="video-form" autocomplete="off">
+        <input id="video-url" placeholder="https://www.youtube.com/watch?v=...">
+        <input id="video-keyword" class="narrow" placeholder="الكلمة المستهدفة (اختياري)">
+        <button class="btn primary" type="submit">حلل</button>
+      </form>
+      <div id="video-result"></div>
+    </section>
+
+    <!-- ===== SEO ===== -->
+    <section class="view" id="view-seo" hidden>
+      <header class="view-head">
+        <h1>SEO للفيديو</h1>
+        <p class="muted">اكتب العنوان والوصف والتاجز قبل ما تنشر، والتقييم بيتحدّث وإنت بتكتب. مجاني.</p>
+      </header>
+      <div class="seo-grid">
+        <form class="panel seo-form" id="seo-form" autocomplete="off">
+          <div class="row-inline">
+            <input id="seo-load-url" placeholder="أو حمّل بيانات فيديو منشور من اللينك">
+            <button class="btn" type="button" id="seo-load">حمّل</button>
+          </div>
+          <label>الكلمة المستهدفة
+            <input name="keyword" placeholder="الجملة اللي عاوز تظهر فيها في البحث">
+          </label>
+          <label>العنوان <span class="counter" data-for="title">0/100</span>
+            <input name="title" maxlength="100">
+          </label>
+          <label>الوصف <span class="counter" data-for="description">0/5000</span>
+            <textarea name="description" rows="12"></textarea>
+          </label>
+          <label>التاجز (افصل بينهم بفاصلة) <span class="counter" data-for="tags">0/500</span>
+            <textarea name="tags" rows="3"></textarea>
+          </label>
+        </form>
+        <div class="panel seo-score" id="seo-score"></div>
+      </div>
+    </section>
+
+    <!-- ===== competitors ===== -->
+    <section class="view" id="view-competitors" hidden>
+      <header class="view-head">
+        <h1>المنافسين</h1>
+        <p class="muted">ضيف القنوات اللي في نفس مجالك. البرنامج بيحدّث فيديوهاتهم كل 12 ساعة (حوالي 3 وحدات للقناة) ويطلعلك الفيديوهات اللي فرقعت.</p>
+      </header>
+      <form class="searchbar" id="comp-form" autocomplete="off">
+        <input id="comp-input" placeholder="لينك القناة أو @handle">
+        <button class="btn primary" type="submit">ضيف</button>
+        <button class="btn" type="button" id="comp-refresh">حدّث الكل</button>
+      </form>
+      <div class="cards" id="comp-list"></div>
+
+      <div id="comp-insights" class="view" hidden>
+      <div class="section-head">
+        <h2>الفيديوهات اللي فرقعت (Outliers)</h2>
+        <div class="filters">
+          <select id="out-days">
+            <option value="30">آخر 30 يوم</option>
+            <option value="90" selected>آخر 90 يوم</option>
+            <option value="365">آخر سنة</option>
+            <option value="3650">الكل</option>
+          </select>
+          <select id="out-format">
+            <option value="long">فيديوهات طويلة</option>
+            <option value="short">شورتس</option>
+            <option value="all">الكل</option>
+          </select>
+          <select id="out-channel"><option value="">كل القنوات</option></select>
+        </div>
+      </div>
+      <p class="muted small">الرقم ×3 معناه إن الفيديو جاب 3 أضعاف المعتاد لقناته. الفيديوهات اللي عمرها يوم أو اتنين لسه بتكبر.</p>
+      <div id="out-list"></div>
+
+      <div class="section-head"><h2>أحسن وقت للنشر</h2></div>
+      <div id="timing"></div>
+      </div>
+    </section>
+
+    <!-- ===== my channel ===== -->
+    <section class="view" id="view-me" hidden>
+      <div id="me-root"></div>
+    </section>
+
+    <!-- ===== settings ===== -->
+    <section class="view" id="view-settings" hidden>
+      <header class="view-head">
+        <h1>الإعدادات</h1>
+        <p class="muted">المفاتيح بتتحفظ في ملف <code>studio/.env</code> على جهازك بس.</p>
+      </header>
+      <div class="settings-grid">
+        <form class="panel" id="settings-form" autocomplete="off">
+          <h2>المفاتيح</h2>
+          <label>YouTube API key <span class="pill" id="st-key"></span>
+            <input name="youtube_api_key" type="password" placeholder="AIza...">
+          </label>
+          <label>Google OAuth Client ID <span class="pill" id="st-client"></span>
+            <input name="google_client_id" type="password" placeholder="....apps.googleusercontent.com">
+          </label>
+          <label>Google OAuth Client Secret
+            <input name="google_client_secret" type="password" placeholder="GOCSPX-...">
+          </label>
+          <div class="row-inline">
+            <label>الدولة <input name="region" class="tiny" placeholder="EG"></label>
+            <label>اللغة <input name="lang" class="tiny" placeholder="ar"></label>
+          </div>
+          <p class="muted small">سيب أي خانة فاضية لو مش عاوز تغيّرها.</p>
+          <button class="btn primary" type="submit">احفظ</button>
+          <p class="muted small" id="settings-msg"></p>
+        </form>
+        <div class="panel guide">
+          <h2>إزاي تجيب المفاتيح (مرة واحدة، 10 دقايق)</h2>
+          <ol>
+            <li>افتح <a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noopener">Google Cloud</a> واعمل مشروع جديد (مجاني).</li>
+            <li>فعّل <a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" rel="noopener">YouTube Data API v3</a> و <a href="https://console.cloud.google.com/apis/library/youtubeanalytics.googleapis.com" target="_blank" rel="noopener">YouTube Analytics API</a>.</li>
+            <li>من <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Credentials</a> اعمل <b>API key</b> وحطه هنا. ده كفاية للكلمات والمنافسين وتحليل الفيديو.</li>
+            <li>عشان «قناتي»: من <a href="https://console.cloud.google.com/auth/overview" target="_blank" rel="noopener">OAuth consent screen</a> اختار External، وضيف إيميلك في <b>Test users</b>.</li>
+            <li>من Credentials اعمل <b>OAuth client ID</b> نوعه <b>Desktop app</b>، وحط الـ Client ID والـ Secret هنا.</li>
+          </ol>
+          <p class="muted small">لو الـ consent screen فاضل في وضع Testing، جوجل بتطلب منك تربط القناة تاني كل 7 أيام. عشان تتجنب ده اعمل Publish للتطبيق (هيطلعلك تحذير إن التطبيق مش متراجع، وده عادي لأنه تطبيقك إنت).</p>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+<div class="toast" id="toast" hidden></div>
+<script src="/static/app.js?v=5"></script>
+</body>
+</html>
