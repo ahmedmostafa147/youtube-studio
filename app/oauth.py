@@ -1,5 +1,7 @@
-"""Google sign-in for your own channel (read-only), using a Desktop-app OAuth client.
+"""Google sign-in for your own channel, using a Desktop-app OAuth client.
 
+Read-only by default. Turning on "editing" in Settings (ALLOW_EDITING=1) adds the youtube.force-ssl scope on the
+next sign-in, which lets the studio change titles, descriptions, thumbnails, playlists and post comment replies.
 The refresh token is stored in data/google_token.json on this computer only.
 """
 
@@ -15,10 +17,11 @@ from . import config, db
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 REVOKE_URL = "https://oauth2.googleapis.com/revoke"
-SCOPES = " ".join([
+READ_SCOPES = [
     "https://www.googleapis.com/auth/youtube.readonly",
     "https://www.googleapis.com/auth/yt-analytics.readonly",
-])
+]
+WRITE_SCOPE = "https://www.googleapis.com/auth/youtube.force-ssl"
 TOKEN_FILE = config.DATA_DIR / "google_token.json"
 
 _pending_states = set()
@@ -36,6 +39,36 @@ def connected():
     return TOKEN_FILE.exists()
 
 
+def editing_enabled():
+    return config.get("ALLOW_EDITING") == "1"
+
+
+def scopes():
+    return READ_SCOPES + ([WRITE_SCOPE] if editing_enabled() else [])
+
+
+def granted_scopes():
+    if not TOKEN_FILE.exists():
+        return []
+    return json.loads(TOKEN_FILE.read_text()).get("scope", "").split()
+
+
+def can_edit():
+    """Editing is on in Settings and the saved sign-in actually includes the write scope."""
+    return editing_enabled() and WRITE_SCOPE in granted_scopes()
+
+
+def write_token():
+    """Access token for changes on the channel; refuses unless the user opted in and approved the write scope."""
+    if not editing_enabled():
+        raise AuthError("التعديل على القناة مقفول. فعّله من الإعدادات الأول.")
+    if not connected():
+        raise AuthError("قناتك مش مربوطة لسه. اربطها من صفحة «قناتي».")
+    if WRITE_SCOPE not in granted_scopes():
+        raise AuthError("محتاج توافق على صلاحية التعديل: اربط القناة تاني من الإعدادات.")
+    return access_token()
+
+
 def redirect_uri():
     return f"http://127.0.0.1:{config.port()}/auth/callback"
 
@@ -49,7 +82,7 @@ def login_url():
         "client_id": config.get("GOOGLE_CLIENT_ID"),
         "redirect_uri": redirect_uri(),
         "response_type": "code",
-        "scope": SCOPES,
+        "scope": " ".join(scopes()),
         "access_type": "offline",
         "prompt": "consent",
         "state": state,
@@ -79,6 +112,8 @@ def _save(token):
         # Google only sends a refresh token on the first consent; keep the old one on refresh.
         "refresh_token": token.get("refresh_token") or previous.get("refresh_token"),
         "expires_at": time.time() + int(token.get("expires_in", 3600)),
+        # Which permissions the user actually approved (refresh responses repeat them).
+        "scope": token.get("scope") or previous.get("scope", ""),
     }
     TOKEN_FILE.write_text(json.dumps(data))
 

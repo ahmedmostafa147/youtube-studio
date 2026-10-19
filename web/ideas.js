@@ -2,7 +2,7 @@
 // "الأفكار والتنبيهات": alerts, AI daily ideas, the video planner board, and trending videos.
 
 const STAGES = { idea: 'أفكار', writing: 'بكتب', filming: 'بصوّر', editing: 'بمنتج', published: 'اتنشر' };
-const ALERT_KIND = { upload: 'فيديو جديد', takeoff: 'بيفرقع', trend: 'ترند في مجالك' };
+const ALERT_KIND = { upload: 'فيديو جديد', takeoff: 'بيفرقع', trend: 'ترند في مجالك', brand: 'ذكر اسم قناتك', scheduled: 'تغيير مجدول', ab: 'اختبار A/B' };
 let trendCategoriesLoaded = false;
 let lastTrends = [];
 

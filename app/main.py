@@ -9,8 +9,8 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import (ai, alerts, analytics, competitors, config, db, insights, jobs, keywords, mychannel, oauth, planner, seo,
-               suggest, trends, util, youtube)
+from . import (abtest, ai, alerts, analytics, bulk, competitors, config, db, editor, insights, jobs, keywords, mychannel,
+               oauth, planner, playlists, ranks, replies, schedule, seo, suggest, trends, util, youtube)
 from .ai import AIError
 from .oauth import AuthError
 from .youtube import YouTubeError
@@ -84,6 +84,11 @@ def status():
         "thumbnail_rules": config.get("THUMBNAIL_RULES"),
         "unread_alerts": alerts.unread_count(),
         "last_job": jobs.last_run(),
+        "editing": editor.status(),
+        "rank_max_keywords": ranks.max_keywords(),
+        "brand_alerts": config.get("BRAND_ALERTS") == "1",
+        "brand_query": ranks.brand_query(),
+        "brand_query_saved": config.get("BRAND_QUERY"),
     }
 
 
@@ -99,6 +104,10 @@ class Settings(BaseModel):
     rpm: str = ""
     channel_voice: str | None = None
     thumbnail_rules: str | None = None
+    allow_editing: bool | None = None
+    rank_max_keywords: str = ""
+    brand_alerts: bool | None = None
+    brand_query: str | None = None
 
 
 @app.post("/api/settings")
@@ -118,6 +127,16 @@ def save_settings(s: Settings):
     for key, value in (("NICHE_KEYWORDS", s.niche_keywords), ("CHANNEL_VOICE", s.channel_voice), ("THUMBNAIL_RULES", s.thumbnail_rules)):
         if value is not None:
             changes[key] = " ".join(value.split())
+    if s.allow_editing is not None:
+        changes["ALLOW_EDITING"] = "1" if s.allow_editing else "0"
+    if s.brand_alerts is not None:
+        changes["BRAND_ALERTS"] = "1" if s.brand_alerts else "0"
+    if s.brand_query is not None:
+        changes["BRAND_QUERY"] = " ".join(s.brand_query.split())
+    if s.rank_max_keywords.strip():
+        if not s.rank_max_keywords.strip().isdigit():
+            raise ValueError("حد كلمات الترتيب لازم يكون رقم.")
+        changes["RANK_MAX_KEYWORDS"] = s.rank_max_keywords.strip()
     config.save(changes)
     if s.my_channel.strip():
         c = mychannel.set_channel(s.my_channel)
@@ -527,3 +546,312 @@ def api_backups():
 @app.get("/api/backups/{name}")
 def api_backup_file(name: str):
     return FileResponse(insights.backup_path(name), filename=name)
+
+
+# ---------- Phase 2: editing your channel ----------
+
+class EditInput(BaseModel):
+    url: str
+    title: str | None = None
+    description: str | None = None
+    tags: list[str] | None = None
+    category_id: str | None = None
+
+
+@app.get("/api/edit/video")
+def api_edit_video(url: str):
+    return editor.video(url)
+
+
+@app.post("/api/edit/video")
+def api_edit_save(body: EditInput):
+    return editor.update(body.url, body.title, body.description, body.tags, body.category_id)
+
+
+@app.get("/api/edit/history")
+def api_edit_history():
+    return editor.history()
+
+
+@app.post("/api/edit/undo/{log_id}")
+def api_edit_undo(log_id: int):
+    return editor.undo(log_id)
+
+
+class BulkInput(BaseModel):
+    field: str = "description"
+    mode: str = "replace"
+    find: str = ""
+    replace: str = ""
+    case: bool = False
+    videos: list[str] = []
+
+
+@app.post("/api/bulk/preview")
+def api_bulk_preview(body: BulkInput):
+    return bulk.preview(body.field, body.mode, body.find, body.replace, body.case, body.videos or None)
+
+
+@app.post("/api/bulk/apply")
+def api_bulk_apply(body: BulkInput):
+    return bulk.apply(body.videos, body.field, body.mode, body.find, body.replace, body.case)
+
+
+class ProfileInput(BaseModel):
+    name: str
+    title: str = ""
+    description: str = ""
+    tags: list[str] = []
+    tags_mode: str = "append"
+    category_id: str = ""
+
+
+@app.get("/api/profiles")
+def api_profiles():
+    return bulk.profiles()
+
+
+@app.post("/api/profiles")
+def api_save_profile(body: ProfileInput):
+    return bulk.save_profile(body.name, body.title, body.description, body.tags, body.tags_mode, body.category_id)
+
+
+@app.delete("/api/profiles/{name}")
+def api_delete_profile(name: str):
+    return bulk.delete_profile(name)
+
+
+class ProfileApply(BaseModel):
+    name: str
+    url: str
+
+
+@app.post("/api/profiles/preview")
+def api_profile_preview(body: ProfileApply):
+    return bulk.profile_preview(body.name, body.url)
+
+
+@app.post("/api/profiles/apply")
+def api_profile_apply(body: ProfileApply):
+    return bulk.profile_apply(body.name, body.url)
+
+
+class TranslateInput(BaseModel):
+    url: str
+    languages: list[str]
+
+
+@app.get("/api/translate/languages")
+def api_languages():
+    return ai.LANGUAGES
+
+
+@app.post("/api/translate")
+def api_translate(body: TranslateInput):
+    v = editor.video(body.url)
+    langs = [l for l in body.languages if l != (v["default_language"] or config.lang())]
+    return {"video": v, **ai.translate(v["title"], v["description"], langs)}
+
+
+class LocalizationsInput(BaseModel):
+    url: str
+    translations: dict[str, dict[str, str]]
+
+
+@app.post("/api/localizations")
+def api_save_localizations(body: LocalizationsInput):
+    return editor.save_localizations(body.url, body.translations)
+
+
+class ScheduleInput(BaseModel):
+    url: str
+    kind: str
+    value: str
+    when: str
+
+
+@app.get("/api/schedule")
+def api_schedule():
+    return schedule.items()
+
+
+@app.post("/api/schedule")
+def api_schedule_add(body: ScheduleInput):
+    return schedule.add(body.url, body.kind, body.value, body.when)
+
+
+@app.delete("/api/schedule/{sid}")
+def api_schedule_cancel(sid: int):
+    return schedule.cancel(sid)
+
+
+# ---------- Phase 2: search ranks ----------
+
+class TagRankInput(BaseModel):
+    url: str
+    tags: list[str] = []
+    limit: int = 5
+
+
+@app.post("/api/ranks/tags")
+def api_tag_rankings(body: TagRankInput):
+    return ranks.tag_rankings(body.url, body.tags or None, body.limit)
+
+
+@app.get("/api/ranks")
+def api_ranks():
+    return ranks.keywords()
+
+
+class RankKeywordInput(BaseModel):
+    keyword: str
+    url: str = ""
+
+
+@app.post("/api/ranks")
+def api_rank_add(body: RankKeywordInput):
+    return ranks.add_keyword(body.keyword, body.url)
+
+
+@app.delete("/api/ranks/{keyword}")
+def api_rank_remove(keyword: str):
+    return ranks.remove_keyword(keyword)
+
+
+@app.post("/api/ranks/check")
+def api_rank_check():
+    return {"checked": ranks.check_ranks(), **ranks.keywords()}
+
+
+@app.post("/api/brand/check")
+def api_brand_check():
+    return {"found": ranks.brand_check(force=True), "query": ranks.brand_query()}
+
+
+# ---------- Phase 2: A/B rotation ----------
+
+class Variant(BaseModel):
+    title: str | None = None
+    thumbnail: str | None = None
+
+
+class ABInput(BaseModel):
+    url: str
+    variants: list[Variant]
+    days: int = 1
+    rounds: int = 2
+
+
+@app.get("/api/ab")
+def api_ab_tests():
+    return abtest.tests()
+
+
+@app.post("/api/ab")
+def api_ab_start(body: ABInput):
+    return abtest.start(body.url, [v.model_dump() for v in body.variants], body.days, body.rounds)
+
+
+@app.get("/api/ab/{test_id}")
+def api_ab_results(test_id: int):
+    return abtest.results(test_id)
+
+
+class ABFinish(BaseModel):
+    keep: int | None = None
+
+
+@app.post("/api/ab/{test_id}/finish")
+def api_ab_finish(test_id: int, body: ABFinish):
+    return abtest.finish(test_id, body.keep)
+
+
+@app.get("/api/thumbs/{name}")
+def api_thumb_file(name: str):
+    if not re.fullmatch(r"[\w.-]+", name) or not (editor.THUMB_DIR / name).exists():
+        raise ValueError("الصورة مش موجودة.")
+    return FileResponse(editor.THUMB_DIR / name)
+
+
+# ---------- Phase 2: playlists ----------
+
+@app.get("/api/playlists")
+def api_playlists():
+    return playlists.mine()
+
+
+@app.get("/api/playlists/{playlist_id}")
+def api_playlist_items(playlist_id: str):
+    return playlists.items(playlist_id)
+
+
+class PlaylistAdd(BaseModel):
+    videos: list[str]
+
+
+@app.post("/api/playlists/{playlist_id}/add")
+def api_playlist_add(playlist_id: str, body: PlaylistAdd):
+    return playlists.add(playlist_id, body.videos)
+
+
+class PlaylistOrder(BaseModel):
+    sort: str = ""
+    order: list[str] | None = None
+
+
+@app.post("/api/playlists/{playlist_id}/reorder/preview")
+def api_playlist_reorder_preview(playlist_id: str, body: PlaylistOrder):
+    return playlists.reorder_preview(playlist_id, body.sort, body.order)
+
+
+@app.post("/api/playlists/{playlist_id}/reorder")
+def api_playlist_reorder(playlist_id: str, body: PlaylistOrder):
+    return playlists.reorder(playlist_id, body.sort, body.order)
+
+
+# ---------- Phase 2: comment replies ----------
+
+@app.get("/api/replies/threads")
+def api_reply_threads(video: str = "", unanswered: bool = True):
+    return replies.threads(video, unanswered)
+
+
+@app.get("/api/replies/canned")
+def api_canned():
+    return replies.canned()
+
+
+class CannedInput(BaseModel):
+    name: str
+    text: str
+    id: int | None = None
+
+
+@app.post("/api/replies/canned")
+def api_save_canned(body: CannedInput):
+    return replies.save_canned(body.name, body.text, body.id)
+
+
+@app.delete("/api/replies/canned/{reply_id}")
+def api_delete_canned(reply_id: int):
+    return replies.delete_canned(reply_id)
+
+
+class DraftInput(BaseModel):
+    comments: list[dict]
+    video_title: str = ""
+
+
+@app.post("/api/replies/drafts")
+def api_reply_drafts(body: DraftInput):
+    return ai.reply_drafts(body.comments, body.video_title)
+
+
+class ReplyInput(BaseModel):
+    comment_id: str
+    text: str
+
+
+@app.post("/api/replies/post")
+def api_reply_post(body: ReplyInput):
+    return replies.post(body.comment_id, body.text)

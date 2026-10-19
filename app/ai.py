@@ -245,3 +245,52 @@ Comments:
 `questions` are recurring questions worth answering, `video_ideas` are follow-up videos these comments suggest. At most 6 per list."""
     data, usage = _ask(prompt, schema)
     return {**data, "usage": usage}
+
+
+# ---------- Phase 2: translations and comment replies ----------
+
+LANGUAGES = {"en": "English", "fr": "French", "es": "Spanish", "de": "German", "tr": "Turkish", "id": "Indonesian",
+             "ur": "Urdu", "hi": "Hindi", "fa": "Persian", "pt": "Portuguese", "ru": "Russian", "ms": "Malay", "ar": "Arabic"}
+
+
+def translate(title, description, languages):
+    """Title and description in other languages, for video localizations."""
+    languages = [l for l in languages if l in LANGUAGES]
+    if not languages:
+        raise AIError("اختار لغة واحدة على الأقل.")
+    item = _obj({"language": {"type": "string", "enum": languages}, "title": STR, "description": STR})
+    schema = _obj({"translations": {"type": "array", "items": item}})
+    prompt = f"""Translate this YouTube video's title and description into: {", ".join(f"{c} ({LANGUAGES[c]})" for c in languages)}.
+
+Title: {title}
+Description:
+{description[:5000] or "(empty)"}
+
+Rules: natural phrasing a native speaker would search for, not word-for-word; keep tool names, brand names, links,
+hashtags and timestamps (chapters) exactly as they are; titles under 100 characters; descriptions under 5000 characters
+and without < or >. One entry per language, `language` is the code."""
+    data, usage = _ask(prompt, schema)
+    out = {}
+    for t in data["translations"]:
+        out[t["language"]] = {"title": t["title"].strip()[:100], "description": t["description"].strip().replace("<", "‹").replace(">", "›")[:5000]}
+    return {"translations": out, "usage": usage}
+
+
+def reply_drafts(comments, video_title=""):
+    """Short reply drafts for comments ([{comment_id, text, author}]). The creator edits and sends them."""
+    if not comments:
+        raise AIError("مفيش كومنتات ترد عليها.")
+    schema = _obj({"replies": {"type": "array", "items": _obj({"comment_id": STR, "reply": STR})}})
+    text = "\n".join(f"[{c['comment_id']}] {c.get('author', '')}: {c['text'][:600]}" for c in comments[:30])
+    prompt = f"""Draft a reply from the creator to each of these YouTube comments.
+
+Video: {video_title or "(various videos on the channel)"}
+Comments (id in brackets):
+{text}
+
+Rules: one or two short sentences, warm and specific to what the commenter said, in the commenter's language (Arabic
+comments get the channel voice); answer questions only when the answer is obvious, otherwise say it's a good idea for a
+video or ask a short follow-up; never promise dates or things the creator didn't say; no links, no emoji spam.
+Return one entry per comment with the same comment_id."""
+    data, usage = _ask(prompt, schema)
+    return {"replies": {r["comment_id"]: r["reply"].strip() for r in data["replies"]}, "usage": usage}

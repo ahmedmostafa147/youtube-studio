@@ -40,6 +40,29 @@ CREATE TABLE IF NOT EXISTS ideas (
     status TEXT DEFAULT 'idea', score INTEGER, source TEXT, created REAL, updated REAL
 );
 CREATE TABLE IF NOT EXISTS tag_lists (name TEXT PRIMARY KEY, tags TEXT NOT NULL, updated REAL);
+CREATE TABLE IF NOT EXISTS edit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, video_id TEXT, video_title TEXT, action TEXT,
+    before TEXT, after TEXT, source TEXT, created REAL
+);
+CREATE TABLE IF NOT EXISTS profiles (
+    name TEXT PRIMARY KEY, title TEXT, description TEXT, tags TEXT, tags_mode TEXT DEFAULT 'append',
+    category_id TEXT, updated REAL
+);
+CREATE TABLE IF NOT EXISTS scheduled (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, video_id TEXT, video_title TEXT, kind TEXT, value TEXT,
+    run_at REAL, status TEXT DEFAULT 'pending', result TEXT, created REAL, done REAL
+);
+CREATE TABLE IF NOT EXISTS rank_keywords (keyword TEXT PRIMARY KEY, video_id TEXT, added REAL);
+CREATE TABLE IF NOT EXISTS rank_history (
+    keyword TEXT, day TEXT, rank INTEGER, video_id TEXT, video_title TEXT, PRIMARY KEY (keyword, day)
+);
+CREATE TABLE IF NOT EXISTS ab_tests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, video_id TEXT, video_title TEXT, variants TEXT, days INTEGER,
+    current INTEGER DEFAULT 0, status TEXT DEFAULT 'running', started REAL, last_switch REAL, winner INTEGER,
+    rounds INTEGER DEFAULT 2
+);
+CREATE TABLE IF NOT EXISTS ab_periods (test_id INTEGER, variant INTEGER, start REAL, end REAL);
+CREATE TABLE IF NOT EXISTS canned_replies (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, text TEXT, updated REAL);
 """
 
 PACIFIC = ZoneInfo("America/Los_Angeles")

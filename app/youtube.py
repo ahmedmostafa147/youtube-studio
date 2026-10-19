@@ -1,6 +1,7 @@
 """YouTube Data API v3 client with caching and quota accounting.
 
-Costs: search = 100 units, everything else we use = 1 unit per call (up to 50 ids per call).
+Costs: search = 100 units, every write (update, insert, thumbnail upload) = 50 units,
+everything else we read = 1 unit per call (up to 50 ids per call).
 """
 
 import json
@@ -12,7 +13,9 @@ import httpx
 from . import config, db, util
 
 API = "https://www.googleapis.com/youtube/v3"
+UPLOAD_API = "https://www.googleapis.com/upload/youtube/v3"
 COST = {"search": 100}
+WRITE_COST = 50
 HOUR = 3600
 DAY = 24 * HOUR
 
@@ -36,6 +39,20 @@ def error_message(response):
         return "الـ YouTube API key مش صح. راجعه من صفحة الإعدادات."
     if reason == "commentsDisabled":
         return "الكومنتات مقفولة على الفيديو ده."
+    if reason in ("insufficientPermissions", "ACCESS_TOKEN_SCOPE_INSUFFICIENT") or "insufficient authentication scopes" in message.lower():
+        return "الربط الحالي قراية بس. فعّل التعديل من الإعدادات واربط القناة تاني."
+    if reason == "invalidTitle":
+        return "يوتيوب رفض العنوان: لازم يكون من 1 لـ 100 حرف ومن غير < أو >."
+    if reason == "invalidDescription":
+        return "يوتيوب رفض الوصف: لازم يكون أقل من 5000 حرف ومن غير < أو >."
+    if reason == "invalidTags":
+        return "يوتيوب رفض التاجز: مجموعها لازم يكون أقل من 500 حرف."
+    if reason == "manualSortRequired":
+        return "قايمة التشغيل دي مترتبة أوتوماتيك. غيّر ترتيبها لـ «يدوي» من YouTube Studio الأول."
+    if reason in ("defaultLanguageNotSet", "defaultLanguageNotSetError"):
+        return "لازم الفيديو يكون ليه لغة أساسية قبل الترجمات."
+    if reason == "uploadRateLimitExceeded":
+        return "يوتيوب مش قابل تغييرات تانية دلوقتي. استنى شوية وجرّب تاني."
     if reason in ("videoNotFound", "notFound"):
         return "مش لاقي ده على يوتيوب. اتأكد من اللينك."
     if reason == "accessNotConfigured" or "has not been used in project" in message:
@@ -74,6 +91,34 @@ def call(endpoint, params, ttl=0, token=None):
     if ttl and not token:
         db.cache_set(cache_key, data)
     return data
+
+
+def write(method, endpoint, params, body=None, token=None, content=None, content_type=None):
+    """POST/PUT/DELETE on the Data API with the channel's write token. Every write costs 50 quota units.
+
+    Pass `content` (bytes) to upload a file, e.g. thumbnails/set.
+    """
+    if not token:
+        raise YouTubeError("التعديل محتاج ربط القناة بصلاحية التعديل.")
+    used = db.quota_used()
+    if used + WRITE_COST > config.DAILY_QUOTA:
+        raise YouTubeError(error_message_quota(used))
+    headers = {"Authorization": f"Bearer {token}"}
+    if content is not None:
+        url = f"{UPLOAD_API}/{endpoint}"
+        headers["Content-Type"] = content_type or "application/octet-stream"
+        response = _client.request(method, url, params=params, headers=headers, content=content)
+    else:
+        response = _client.request(method, f"{API}/{endpoint}", params=params, headers=headers, json=body)
+    db.add_quota(WRITE_COST)
+    if response.status_code not in (200, 204):
+        raise YouTubeError(error_message(response))
+    return response.json() if response.content else {}
+
+
+def error_message_quota(used):
+    left = max(config.DAILY_QUOTA - used, 0)
+    return f"الـ quota الباقية النهارده ({left:,} وحدة) مش كفاية للتعديل ده. كل تعديل بياخد {WRITE_COST} وحدة."
 
 
 def _chunks(items, size):

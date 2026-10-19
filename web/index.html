@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Alexandria:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/style.css?v=8">
+  <link rel="stylesheet" href="/static/style.css?v=9">
 </head>
 <body>
 <div class="shell">
@@ -23,6 +23,8 @@
       <a href="#video" data-view="video">تحليل فيديو</a>
       <a href="#competitors" data-view="competitors">المنافسين</a>
       <a href="#me" data-view="me">قناتي</a>
+      <a href="#edit" data-view="edit">تعديل القناة</a>
+      <a href="#ranks" data-view="ranks">ترتيبك في البحث</a>
       <a href="#settings" data-view="settings">الإعدادات</a>
     </nav>
     <div class="quota" id="quota" title="YouTube Data API: 10,000 وحدة في اليوم مجانًا">
@@ -264,6 +266,57 @@
       <div id="me-root"></div>
     </section>
 
+    <!-- ===== edit my channel (phase 2) ===== -->
+    <section class="view" id="view-edit" hidden>
+      <header class="view-head">
+        <h1>تعديل القناة</h1>
+        <p class="muted">تعديلات على فيديوهاتك من هنا. كل حاجة بتبدأ بمعاينة ببلاش، ومفيش حاجة بتتغيّر على يوتيوب غير لما تختار الفيديوهات وتدوس تطبيق. كل تعديل بياخد <b class="num">50</b> وحدة من الـ quota وبيتسجل في «السجل» عشان تقدر ترجّعه.</p>
+      </header>
+      <div id="edit-gate"></div>
+      <div class="tabs" role="tablist" id="edit-tabs">
+        <button class="tab" type="button" role="tab" data-tab="bulk" aria-selected="true">تعديل جماعي</button>
+        <button class="tab" type="button" role="tab" data-tab="profiles" aria-selected="false">القوالب</button>
+        <button class="tab" type="button" role="tab" data-tab="translate" aria-selected="false">الترجمة</button>
+        <button class="tab" type="button" role="tab" data-tab="schedule" aria-selected="false">مواعيد</button>
+        <button class="tab" type="button" role="tab" data-tab="ab" aria-selected="false">A/B</button>
+        <button class="tab" type="button" role="tab" data-tab="playlists" aria-selected="false">قوايم التشغيل</button>
+        <button class="tab" type="button" role="tab" data-tab="replies" aria-selected="false">الردود</button>
+        <button class="tab" type="button" role="tab" data-tab="history" aria-selected="false">السجل</button>
+      </div>
+      <div id="edit-pane"></div>
+    </section>
+
+    <!-- ===== search ranks (phase 2) ===== -->
+    <section class="view" id="view-ranks" hidden>
+      <header class="view-head">
+        <h1>ترتيبك في البحث</h1>
+        <p class="muted">فيديوهاتك ترتيبها كام في بحث يوتيوب. كل كلمة بتتفحص بـ search، وده أغلى طلب: <b class="num">100</b> وحدة للكلمة من الـ <span class="num">10,000</span> اليومية. عشان كده العدد محدود وبيظهر قبل ما تدوس.</p>
+      </header>
+      <div class="panel">
+        <div class="panel-head"><h2>ترتيب التاجز</h2><span class="muted small" id="tagrank-cost"></span></div>
+        <p class="muted small">الفيديو ترتيبه كام في أول 50 نتيجة لكل تاج من التاجز بتاعته (أو للكلمات اللي تكتبها).</p>
+        <form class="row-inline wrap" id="tagrank-form" autocomplete="off">
+          <label class="grow">لينك الفيديو <input name="url" placeholder="https://www.youtube.com/watch?v=..."></label>
+          <label class="grow">كلمات معينة (اختياري، افصل بفاصلة) <input name="tags" placeholder="لو فاضية هيستخدم تاجز الفيديو"></label>
+          <label>عدد الكلمات <select name="limit"><option>3</option><option selected>5</option><option>10</option></select></label>
+          <button class="btn primary" type="submit">افحص</button>
+        </form>
+        <div id="tagrank-result"></div>
+      </div>
+
+      <div class="section-head"><h2>متابعة الترتيب يوميًا</h2><button class="btn small" type="button" id="ranks-check">افحص دلوقتي</button></div>
+      <p class="muted small" id="ranks-cost"></p>
+      <form class="searchbar" id="ranks-form" autocomplete="off">
+        <input name="keyword" placeholder="الكلمة اللي عاوز تتابع ترتيبك فيها">
+        <input name="url" class="narrow" placeholder="فيديو معين (اختياري)">
+        <button class="btn primary" type="submit">تابع</button>
+      </form>
+      <div id="ranks-list"></div>
+
+      <div class="section-head"><h2>تنبيهات اسم القناة</h2><button class="btn small" type="button" id="brand-check">افحص دلوقتي (100 وحدة)</button></div>
+      <div class="panel" id="brand-panel"></div>
+    </section>
+
     <!-- ===== settings ===== -->
     <section class="view" id="view-settings" hidden>
       <header class="view-head">
@@ -308,6 +361,19 @@
           <label>قواعد الثمبنيل
             <textarea name="thumbnail_rules" rows="2" placeholder="مثلًا: 3 كلمات بالكتير، من غير وشوش، خلفية غامقة"></textarea>
           </label>
+          <h2>التعديل على القناة</h2>
+          <label class="check-inline"><input type="checkbox" name="allow_editing"> اسمح للبرنامج يعدّل على قناتك <span class="pill" id="st-edit"></span></label>
+          <p class="muted small">مقفول افتراضيًا. لما تفعّله وتربط القناة تاني، جوجل هتطلب صلاحية youtube.force-ssl: تعديل العناوين والوصف والثمبنيل والظهور وقوايم التشغيل والرد على الكومنتات. مفيش حاجة بتتغيّر غير لما تدوس تطبيق، أو في ميعاد إنت حددته. لو قفلته تاني، كل التعديلات بتتوقف.</p>
+          <div id="st-edit-link"></div>
+
+          <h2>الترتيب في البحث</h2>
+          <label>أقصى عدد كلمات تتابعها يوميًا (كل كلمة = 100 وحدة في اليوم)
+            <input name="rank_max_keywords" class="tiny" placeholder="5">
+          </label>
+          <label class="check-inline"><input type="checkbox" name="brand_alerts"> نبّهني لما حد يذكر اسم قناتي (بحث مرة في اليوم = 100 وحدة)</label>
+          <label>الاسم اللي يتدوّر عليه
+            <input name="brand_query" placeholder="اسم قناتك">
+          </label>
           <p class="muted small">سيب أي خانة فاضية لو مش عاوز تغيّرها.</p>
           <button class="btn primary" type="submit">احفظ</button>
           <p class="muted small" id="settings-msg"></p>
@@ -329,10 +395,12 @@
   </main>
 </div>
 <div class="toast" id="toast" hidden></div>
-<script src="/static/app.js?v=8"></script>
-<script src="/static/ideas.js?v=8"></script>
-<script src="/static/write.js?v=8"></script>
-<script src="/static/thumb.js?v=8"></script>
-<script src="/static/channel.js?v=8"></script>
+<script src="/static/app.js?v=9"></script>
+<script src="/static/ideas.js?v=9"></script>
+<script src="/static/write.js?v=9"></script>
+<script src="/static/thumb.js?v=9"></script>
+<script src="/static/channel.js?v=9"></script>
+<script src="/static/edit.js?v=9"></script>
+<script src="/static/ranks.js?v=9"></script>
 </body>
 </html>

@@ -18,10 +18,22 @@ A free, open-source alternative to vidIQ and TubeBuddy that runs on your own com
 | تحليل فيديو | تاجز أي فيديو، وأداءه مقارنة بقناته، وتقييم SEO، وتحليل الكومنتات، والاحتفاظ (لفيديوهاتك) | حوالي 4، والكومنتات حوالي 3 |
 | المنافسين | مقارنة قناتك بالمنافسين، والفيديوهات اللي فرقعت مع المشاهدات في الساعة، وأحسن وقت للنشر | حوالي 3 لكل قناة |
 | قناتي | آخر فيديوهاتك ومشاهداتها في الساعة، وفحص صحة القناة، والأهداف، والأرباح التقديرية، ونسخة احتياطية. وبعد الربط: الكلمات اللي الناس بحثت بيها ووصلتلك، ومصادر المشاهدات، والجمهور | قليلة، و Analytics ليها quota منفصلة |
+| تعديل القناة | تعديل جماعي (دوّر واستبدل، أو ضيف سطر في أول/آخر الوصف أو العنوان)، وقوالب للعنوان والوصف والتاجز، وترجمة العنوان والوصف للغات تانية، وتغييرات في ميعاد (عنوان، وصف، ثمبنيل، إخفاء الفيديو)، واختبار A/B بالتبديل، وإضافة وترتيب قوايم التشغيل، والرد على الكومنتات بردود جاهزة أو مسودات بالـ AI، وسجل لكل تعديل مع زرار «رجّع» | المعاينة ببلاش تقريبًا، وكل تعديل 50 |
+| ترتيبك في البحث | ترتيب الفيديو في البحث لكل تاج، ومتابعة ترتيبك يوميًا لكلمات بتختارها، وتنبيه لما حد يذكر اسم قناتك | 100 لكل كلمة (والمتابعة 100 لكل كلمة في اليوم) |
 
 الكتابة بالـ AI من الداشبورد محتاجة Claude API key. من Claude Code مش محتاجاه: Claude بيكتب بنفسه وبيستخدم أدوات البرنامج.
 
 الـ quota المجانية من جوجل 10,000 وحدة في اليوم، يعني حوالي 90 تحليل كلمة في اليوم. بتتجدد حوالي الساعة 10 الصبح بتوقيت مصر.
+
+### التعديل على القناة (مقفول افتراضيًا)
+
+البرنامج بيقرأ بس لحد ما تفعّل «اسمح للبرنامج يعدّل على قناتك» من الإعدادات وتربط القناة تاني. ساعتها جوجل بتطلب صلاحية `youtube.force-ssl` (تعديل العناوين والوصف والثمبنيل والظهور وقوايم التشغيل والرد على الكومنتات). وبعد كده:
+
+- كل تعديل بيبدأ بمعاينة، ومفيش حاجة بتتغيّر غير لما تختار الفيديوهات بنفسك وتدوس تطبيق. الردود على الكومنتات مش بتتبعت غير لما تدوس «ابعت» على كل رد.
+- الفيديو بيتقري تاني قبل التعديل مباشرة، والقيمة القديمة بتتحفظ في «السجل» عشان ترجّعها بزرار (والثمبنيل القديم بيتحفظ نسخة منه).
+- التغييرات المجدولة واختبارات A/B بتتنفذ من الفحص اللي بيحصل كل ساعة، يعني في خلال ساعة من الميعاد وبس لو الداشبورد شغال.
+- اختبار A/B هنا بيبدّل النسخ ورا بعض كل كام يوم ويقارن أرقام Analytics. لو قناتك عندها «Test & Compare» في YouTube Studio استخدمه الأول، لأنه بيقسم المشاهدين في نفس الوقت وأدق.
+- لو قفلت التعديل تاني من الإعدادات، كل التعديلات بتتوقف فورًا.
 
 ## التشغيل على ويندوز
 
@@ -41,7 +53,7 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt && .venv/bin/
 كل واحد بيستخدم مفاتيحه هو من [Google Cloud](https://console.cloud.google.com/):
 
 - **YouTube API key:** كفاية للكلمات والمنافسين وتحليل الفيديو.
-- **OAuth Client ID و Secret** (نوع Desktop app): عشان صفحة «قناتي» بس. الصلاحية قراءة فقط.
+- **OAuth Client ID و Secret** (نوع Desktop app): عشان صفحة «قناتي». الصلاحية قراءة فقط، إلا لو فعّلت التعديل من الإعدادات.
 
 المفاتيح بتتحفظ في ملف `.env` على جهازك، ومش بتتبعت لأي حد غير جوجل.
 
@@ -54,6 +66,16 @@ claude mcp add youtube-studio -- "<مكان المشروع>/.venv/Scripts/python
 ```
 
 لازم تشغّل `run.bat` مرة الأول عشان المكتبات تتسطّب، وتربط قناتك من الداشبورد لو عاوز أدوات «قناتي». الداشبورد والـ MCP بيستخدموا نفس المفاتيح ونفس البيانات.
+
+أدوات التعديل من Claude Code (زي `edit_video` و `bulk_edit_apply` و `save_localizations` و `reply_to_comment`) بتعمل معاينة بس، ومش بتغيّر حاجة غير لو اتنادت بـ `confirm=true` بعد ما توافق إنت على المعاينة.
+
+## الاختبارات
+
+اختبارات المرحلة التانية بتشتغل على داتا وهمية (من غير نت ومن غير ما تلمس بياناتك):
+
+```bash
+.venv/Scripts/python.exe tests/run_phase2.py
+```
 
 ## إزاي الأرقام بتتحسب
 
@@ -82,6 +104,10 @@ A local dashboard for YouTube creators. The interface is in Arabic.
 - **SEO checker:** scores your title, description and tags as you type.
 - **Competitors:** track channels, find their outlier videos, and see which weekday and hour perform best.
 - **My channel** (OAuth, read-only): the real search terms that brought viewers, traffic sources, per-video performance, countries, age and gender.
+- **Edit my channel** (opt-in, see below): bulk find/replace/append in titles or descriptions with a dry-run preview and per-video selection; upload profiles (title/description templates with `{title}`, `{description}`, `{date}`, plus tags and category); AI translation of title and description saved as video localizations; scheduled title/description/thumbnail changes and "sunset" (unlist or make private on a date); title/thumbnail A/B rotation with an analytics comparison; playlist add and reorder; canned comment replies and AI reply drafts, posted only when you press send; a log of every change with one-click undo.
+- **Search ranks:** a video's rank for each of its tags, daily rank tracking for chosen keywords, and daily brand-mention alerts. These use `search.list` at 100 quota units per keyword, so the number of tracked keywords is capped in Settings (default 5 = 500 units/day) and every button shows its cost.
+
+**Editing is off by default.** The OAuth sign-in is read-only until you tick "allow editing" in Settings and link the channel again, which adds the `youtube.force-ssl` scope. Every change costs 50 quota units, re-reads the video right before writing, and is logged with the old value. Scheduled changes and A/B switches run from the hourly background check, so they happen within an hour of their time and only while the dashboard is running; A/B switches land just after midnight Pacific time so each version owns whole YouTube Analytics days. YouTube Studio's built-in Test & Compare splits viewers at the same time and is more accurate when your channel has it. Turning editing off stops all writes immediately.
 
 **Run**
 
@@ -100,6 +126,10 @@ claude mcp add youtube-studio -- "<repo>/.venv/Scripts/python.exe" "<repo>/mcp_s
 ```
 
 The dashboard and the MCP server share the same keys and data. Link your channel from the dashboard for the `my_*` tools.
+
+MCP tools that change the channel (`edit_video`, `bulk_edit_apply`, `apply_upload_profile`, `save_localizations`, `schedule_change`, `start_ab_test`, `finish_ab_test`, `add_to_playlist`, `reorder_playlist`, `reply_to_comment`, `undo_edit`) return a preview and change nothing unless called with `confirm=true`. Read and preview tools (`bulk_edit_preview`, `video_details`, `tag_rankings`, `tracked_keywords`, `ab_test_results`, `unanswered_comments`, …) need no confirmation.
+
+**Tests.** `tests/run_phase2.py` runs the Phase 2 features against fake YouTube, Analytics and Claude responses (no network, temp data folder).
 
 **How scores work.** vidIQ's search volume comes from its own user data, which no public API provides. Here, *demand* comes from how fast the top results gain views and how early autocomplete suggests the phrase; *competition* comes from the size of the ranking channels and how many of them use the phrase in their title. Treat the numbers as a way to compare keywords, not as real search counts.
 

@@ -165,8 +165,8 @@ function renderSeo(seo) {
 }
 
 // ---------- router ----------
-const VIEWS = ['ideas', 'keywords', 'write', 'thumb', 'seo', 'video', 'competitors', 'me', 'settings'];
-// Pages in other files (ideas.js, write.js, thumb.js, channel.js) register their own entries.
+const VIEWS = ['ideas', 'keywords', 'write', 'thumb', 'seo', 'video', 'competitors', 'me', 'edit', 'ranks', 'settings'];
+// Pages in other files (ideas.js, write.js, thumb.js, channel.js, edit.js, ranks.js) register their own entries.
 const onEnter = {
   competitors: () => loadCompetitors(),
   seo: () => loadTagLists(),
@@ -658,6 +658,17 @@ function fillSettings() {
     form.niche_keywords.value = status.niche_keywords || '';
     form.channel_voice.value = status.channel_voice || '';
     form.thumbnail_rules.value = status.thumbnail_rules || '';
+    const ed = status.editing;
+    form.allow_editing.checked = ed.enabled;
+    $('#st-edit').textContent = ed.can_edit ? 'شغال' : ed.enabled ? 'محتاج ربط' : 'مقفول';
+    $('#st-edit').classList.toggle('ok', ed.can_edit);
+    $('#st-edit-link').innerHTML = ed.enabled && !ed.can_edit
+      ? (status.has_client ? '<a class="btn small primary" href="/auth/login">اربط القناة ووافق على صلاحية التعديل</a>' : '<p class="muted small">حط الـ OAuth Client ID والـ Secret الأول.</p>')
+      : '';
+    form.rank_max_keywords.placeholder = status.rank_max_keywords;
+    form.brand_alerts.checked = status.brand_alerts;
+    form.brand_query.value = status.brand_query_saved || '';
+    form.brand_query.placeholder = status.brand_query || 'اسم قناتك';
   });
 }
 
@@ -665,10 +676,12 @@ $('#settings-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const form = e.target;
   const body = Object.fromEntries(new FormData(form));
+  body.allow_editing = form.allow_editing.checked;
+  body.brand_alerts = form.brand_alerts.checked;
   await busy($('button[type=submit]', form), async () => {
     try {
       await api('/api/settings', { method: 'POST', body });
-      $$('input', form).forEach((i) => { if (i.name !== 'niche_keywords') i.value = ''; });
+      $$('input', form).forEach((i) => { if (i.name !== 'niche_keywords' && i.type !== 'checkbox') i.value = ''; });
       toast('اتحفظ');
       meLoaded = false;
       fillSettings();
