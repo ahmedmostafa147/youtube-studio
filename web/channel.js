@@ -1,6 +1,6 @@
 'use strict';
-// "قناتي": public data from your channel link (recent videos, audit, milestones, earnings, backup),
-// then YouTube Analytics once the channel is linked with OAuth.
+// "الرئيسية": your channel at a glance (public data from your channel link), with details that load on demand:
+// YouTube Analytics (after linking with OAuth), goals and earnings, the full audit, and backups.
 
 const meRoot = $('#me-root');
 let meDays = 28;
@@ -60,63 +60,174 @@ function connectPanel() {
       </div>`;
 }
 
+// ---------- setup checklist (also shown in Settings) ----------
+function setupSteps() {
+  return [
+    { done: status.has_key, title: 'مفتاح YouTube API', why: 'من غيره مفيش أي أرقام.', href: '#settings', action: 'حطه في الإعدادات' },
+    { done: !!status.my_channel?.id, title: 'لينك قناتك', why: 'عشان الرئيسية تعرض أرقامك إنت.', href: '#settings', action: 'حطه في الإعدادات' },
+    { done: status.competitor_count > 0, title: 'ضيف 3 منافسين على الأقل', why: 'عشان تعرف الفيديوهات اللي بتفرقع في مجالك وتقارن نفسك بيهم.', href: '#competitors', action: 'ضيف منافسين' },
+    { done: status.connected, title: 'اربط قناتك بيوتيوب', why: 'عشان تشوف ساعات المشاهدة والمشتركين الجداد والكلمات اللي جابتلك ناس.', href: status.has_client ? '/auth/login' : '#settings', action: status.has_client ? 'اربط القناة' : 'حط مفاتيح الربط' },
+  ];
+}
+
+function renderSetup(steps, { compact = false } = {}) {
+  const left = steps.filter((s) => !s.done);
+  if (!left.length) return '';
+  return `<div class="panel setup">
+    <div class="panel-head"><h2>${compact ? `فاضل ${left.length} من ${steps.length} خطوات عشان الأداة تشتغل كاملة` : 'خلينا نجهّز الأداة'}</h2>
+      <span class="muted small num">${steps.length - left.length}/${steps.length}</span></div>
+    <ol class="steps">${steps.map((s) => `
+      <li class="${s.done ? 'done' : ''}"><span class="mark"></span>
+        <div><b>${s.title}</b><div class="muted small">${s.why}</div></div>
+        ${s.done ? '<span class="muted small">تمام</span>' : `<a class="btn small" href="${s.href}">${s.action}</a>`}
+      </li>`).join('')}</ol>
+  </div>`;
+}
+
+// ---------- home ----------
 async function loadMe(force = false) {
   if (meLoaded && !force) return;
   await loadStatus();
   meLoaded = true;
-  const hasChannel = !!status.my_channel.id;
+  const steps = setupSteps();
+  if (!status.has_key || !status.my_channel.id) {
+    meRoot.innerHTML = `<header class="view-head"><h1>أهلًا بيك</h1>
+      <p class="muted">الأداة دي بتوريك قناتك ماشية إزاي، والفيديوهات اللي بتفرقع في مجالك، وتقيّم الكلمات والعناوين قبل ما تنشر. خطوتين بس وتبدأ:</p></header>
+      ${renderSetup(steps)}`;
+    return;
+  }
   meRoot.innerHTML = `
-    <header class="view-head">
-      <h1>قناتي${status.my_channel.title ? `: ${esc(status.my_channel.title)}` : ''}</h1>
-      <p class="muted">من غير ربط: آخر فيديوهاتك ومشاهداتها في الساعة، وفحص صحة القناة، والأهداف، والأرباح التقديرية. بعد الربط: أرقام YouTube Analytics الحقيقية.</p>
+    <header class="home-head">
+      <img id="home-avatar" alt="">
+      <div><h1>${esc(status.my_channel.title || 'قناتك')}</h1>
+        <div class="muted small" id="home-updated">بيجيب الأرقام من يوتيوب...</div></div>
+      <button class="btn small" id="home-refresh">حدّث</button>
     </header>
-    ${hasChannel ? `
-      <div class="section-head"><h2>آخر فيديوهاتك دلوقتي</h2><button class="btn small" id="me-recent-refresh">حدّث</button></div>
-      <p class="muted small">المشاهدات في الساعة بتظهر بعد تحديثين بينهم نص ساعة على الأقل. البرنامج بيحدّث لوحده كل ساعة وهو مفتوح.</p>
-      <div id="me-recent"></div>
-      <div class="grid two">
-        <div class="panel" id="me-milestones"></div>
-        <div class="panel" id="me-earnings"></div>
+    ${renderSetup(steps, { compact: true })}
+    <div id="home-kpis">${loading('بيجيب أرقام قناتك')}</div>
+    <div id="home-analytics"></div>
+    <div class="section-head"><h2>آخر فيديوهاتك</h2><span class="muted small" id="home-usual"></span></div>
+    <div id="home-videos"></div>
+    <div class="grid two">
+      <div class="panel" id="home-fixes"></div>
+      <div class="panel" id="home-alerts"></div>
+    </div>
+    <details class="more" data-load="analytics">
+      <summary>أرقام YouTube Analytics بالتفصيل <span class="muted small">الكلمات اللي جابتلك ناس، المشاهدات جاية منين، الجمهور</span></summary>
+      <div class="more-body">
+        ${status.connected ? `<div class="filters">
+          <select id="me-days">${[7, 28, 90, 365].map((d) => `<option value="${d}" ${d === meDays ? 'selected' : ''}>آخر ${d} يوم</option>`).join('')}</select>
+          <button class="btn ghost small" id="me-logout">افصل القناة</button></div>` : ''}
+        <div id="me-analytics"></div>
       </div>
-      <div class="section-head"><h2>فحص صحة القناة</h2>
+    </details>
+    <details class="more" data-load="goals">
+      <summary>الأهداف والأرباح التقديرية</summary>
+      <div class="more-body grid two"><div class="panel" id="me-milestones"></div><div class="panel" id="me-earnings"></div></div>
+    </details>
+    <details class="more" data-load="audit">
+      <summary>فحص صحة القناة بالتفصيل</summary>
+      <div class="more-body">
         <form class="row-inline" id="audit-form"><input id="audit-channel" placeholder="أو افحص قناة تانية: @handle"><button class="btn small" type="submit">افحص</button></form>
+        <div id="me-audit"></div>
       </div>
-      <div id="me-audit"></div>
-      <div class="section-head"><h2>نسخة احتياطية</h2></div>
-      <div class="panel" id="me-backup">
+    </details>
+    <details class="more" data-load="backup">
+      <summary>نسخة احتياطية من بيانات فيديوهاتك</summary>
+      <div class="more-body panel" id="me-backup">
         <p class="muted small">بيحفظ عنوان ووصف وتاجز وأرقام كل فيديوهاتك في ملف JSON و CSV (بيفتح في Excel). حوالي وحدتين quota لكل 50 فيديو.</p>
         <div><button class="btn" id="backup-run">اعمل نسخة دلوقتي</button></div>
         <div id="backup-list"></div>
-      </div>`
-    : `<div class="panel"><p>حط لينك قناتك في الإعدادات (أو اربطها تحت) عشان تظهر هنا: آخر فيديوهاتك، وفحص صحة القناة، والأهداف، والأرباح التقديرية.</p>
-        <div><a class="btn primary" href="#settings">حط لينك القناة</a></div></div>`}
-    <div class="section-head">
-      <h2>YouTube Analytics</h2>
-      ${status.connected ? `<div class="filters">
-        <select id="me-days">${[7, 28, 90, 365].map((d) => `<option value="${d}" ${d === meDays ? 'selected' : ''}>آخر ${d} يوم</option>`).join('')}</select>
-        <button class="btn ghost small" id="me-logout">افصل القناة</button></div>` : ''}
-    </div>
-    <div id="me-analytics"></div>`;
+      </div>
+    </details>`;
+  loadHome();
+}
 
-  if (hasChannel) {
-    loadRecent();
+const VERDICT_CLASS = { great: 'hot', good: 'hot', normal: '', growing: 'soft', new: 'soft', unknown: 'soft', low: 'low' };
+
+async function loadHome() {
+  try {
+    const h = await api('/api/home');
+    const c = h.channel;
+    $('#home-avatar').src = c.thumbnail;
+    $('#home-updated').textContent = `${fmt(c.subs)} مشترك · الأرقام من يوتيوب مباشرة، اتحدثت دلوقتي`;
+    const g = h.subs_growth;
+    const change = h.prev30.views ? Math.round(((h.last30.views - h.prev30.views) / h.prev30.views) * 100) : null;
+    $('#home-kpis').innerHTML = `<div class="grid kpis">
+      ${statCard('المشتركين', num(c.subs), g ? `<span class="delta ${g.subs >= 0 ? 'up' : 'down'} num">${g.subs >= 0 ? '+' : ''}${fmt(g.subs)}</span> في آخر ${plural(g.days, 'يوم', 'أيام')}` : 'الزيادة بتظهر بعد كام يوم من استخدام الأداة')}
+      ${statCard('إجمالي المشاهدات', num(c.view_count), `على ${plural(c.video_count, 'فيديو', 'فيديوهات')}`)}
+      ${statCard('فيديوهات آخر 30 يوم', `<span class="num">${h.last30.videos}</span>`, `جابت <span class="num">${fmt(h.last30.views)}</span> مشاهدة لحد دلوقتي${change == null ? '' : ` (<span class="delta ${change >= 0 ? 'up' : 'down'} num">${change >= 0 ? '+' : ''}${change}%</span> عن الشهر اللي قبله)`}`)}
+      ${statCard('صحة القناة', `<span class="score-inline ${tone(h.health.score)} num">${h.health.score}</span><span class="muted small">/100</span>`, 'من آخر 50 فيديو: النشر، الوصف، الـ Chapters، التفاعل')}
+    </div>`;
+    $('#home-usual').textContent = `المعتاد لقناتك: ${fmt(h.usual.long)} مشاهدة للفيديو الطويل، ${fmt(h.usual.short)} للشورت`;
+    $('#home-videos').innerHTML = h.recent.length ? `<div class="vcards">${h.recent.map((v) => `
+      <a class="vcard" href="https://www.youtube.com/watch?v=${esc(v.id)}" target="_blank" rel="noopener">
+        <img src="${esc(v.thumbnail)}" alt="" loading="lazy">
+        <div class="t">${esc(v.title)}</div>
+        <div class="m"><span class="num">${fmt(v.views)}</span> مشاهدة · ${ago(v.age_days)}${v.is_short ? ' · شورت' : ''}${v.vph != null ? ` · <span class="num">${fmt(v.vph)}</span>/ساعة` : ''}</div>
+        <span class="badge ${VERDICT_CLASS[v.verdict]}">${esc(v.verdict_text)}</span>
+      </a>`).join('')}</div>` : empty('مفيش فيديوهات على القناة لسه.');
+    $('#home-fixes').innerHTML = `<h2>حاجات تكبّر بيها القناة</h2>
+      ${h.health.fixes.length ? `<div class="checks">${h.health.fixes.map((f) => `
+        <div class="check ${f.status}"><span class="mark"></span><span>${esc(f.label)}: <span class="muted">${esc(f.value)}</span></span><span class="tip">${esc(f.tip)}</span></div>`).join('')}</div>`
+        : '<p class="muted small">قناتك ماشية كويس في كل الفحوصات.</p>'}`;
+  } catch (err) {
+    $('#home-kpis').innerHTML = errorBox(err.message);
+  }
+  loadHomeAlerts();
+  if (status.connected) loadHomeAnalytics();
+}
+
+async function loadHomeAlerts() {
+  const box = $('#home-alerts');
+  try {
+    const rows = (await api('/api/alerts')).slice(0, 4);
+    box.innerHTML = `<div class="panel-head"><h2>آخر التنبيهات</h2><a class="small" href="#ideas">كلها</a></div>
+      ${rows.length ? `<div class="alerts">${rows.map((a) => `
+        <a class="alert ${a.read ? '' : 'unread'}" href="${esc(a.url)}" target="_blank" rel="noopener">
+          <img src="${esc(a.thumbnail)}" alt="" loading="lazy">
+          <div><div class="k">${ALERT_KIND[a.kind] || ''}</div><div class="t">${esc(a.title)}</div><div class="muted small">${esc(a.body)}</div></div>
+        </a>`).join('')}</div>`
+        : `<p class="muted small">${status.competitor_count ? 'مفيش جديد عند منافسينك.' : 'ضيف منافسين عشان يوصلك تنبيه لما حد فيهم ينزّل فيديو أو فيديو يفرقع.'}</p>`}`;
+  } catch (err) { box.innerHTML = errorBox(err.message); }
+}
+
+async function loadHomeAnalytics() {
+  const box = $('#home-analytics');
+  try {
+    const o = await api('/api/me/overview?days=28');
+    const c = o.current, p = o.previous;
+    const net = (r) => (r.subscribersGained || 0) - (r.subscribersLost || 0);
+    box.innerHTML = `<div class="section-head"><h2>آخر 28 يوم</h2><span class="muted small">من YouTube Analytics (بتتأخر حوالي يومين)</span></div>
+      <div class="grid kpis">
+        ${statCard('المشاهدات', num(c.views), delta(c.views, p.views))}
+        ${statCard('ساعات المشاهدة', num((c.estimatedMinutesWatched || 0) / 60), delta(c.estimatedMinutesWatched, p.estimatedMinutesWatched))}
+        ${statCard('مشتركين جداد (صافي)', `<span class="num">${net(c) >= 0 ? '+' : ''}${fmt(net(c))}</span>`, delta(net(c), net(p)))}
+        ${statCard('متوسط مدة المشاهدة', clock(c.averageViewDuration), delta(c.averageViewDuration, p.averageViewDuration))}
+      </div>`;
+  } catch (err) {
+    box.innerHTML = err.auth ? `<div class="panel"><p>${esc(err.message)}</p><a class="btn small" href="/auth/login">اربط القناة تاني</a></div>` : '';
+  }
+}
+
+// The detail sections load only when opened, to save quota.
+meRoot.addEventListener('toggle', (e) => {
+  const d = e.target;
+  if (!d.matches('details[data-load]') || !d.open || d.dataset.loaded) return;
+  d.dataset.loaded = '1';
+  const what = d.dataset.load;
+  if (what === 'analytics') {
+    if (status.has_client && status.connected) loadAnalytics();
+    else $('#me-analytics').innerHTML = connectPanel();
+  } else if (what === 'goals') {
     fill('#me-milestones', '/api/milestones', renderMilestones);
     loadEarnings();
+  } else if (what === 'audit') {
     fill('#me-audit', '/api/audit', renderAudit);
+  } else if (what === 'backup') {
     loadBackups();
   }
-  if (status.has_client && status.connected) loadAnalytics();
-  else $('#me-analytics').innerHTML = connectPanel();
-}
-
-// ---------- recent videos ----------
-function loadRecent() {
-  fill('#me-recent', '/api/me/recent', (d) => table(d.videos, [
-    'video', 'views', 'vph',
-    { h: 'آخر 48 ساعة', cell: (v) => (v.last_48h == null ? '<span class="muted small">—</span>' : num(v.last_48h)) },
-    'vpd', 'age',
-  ]));
-}
+}, true);
 
 // ---------- milestones ----------
 function renderMilestones(m) {
@@ -202,8 +313,8 @@ async function loadBackups() {
 
 meRoot.addEventListener('click', async (e) => {
   const id = e.target.id;
-  if (id === 'me-recent-refresh') {
-    loadRecent();
+  if (id === 'home-refresh') {
+    loadHome();
   } else if (id === 'backup-run') {
     await busy(e.target, async () => {
       try {

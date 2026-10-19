@@ -8,23 +8,18 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Alexandria:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/style.css?v=9">
+  <link rel="stylesheet" href="/static/style.css?v=11">
 </head>
 <body>
 <div class="shell">
   <aside class="sidebar">
     <div class="brand"><span class="nuqta"></span><span>Studio</span></div>
     <nav>
-      <a href="#ideas" data-view="ideas">الأفكار <span class="count-badge num" id="alert-count" hidden></span></a>
-      <a href="#keywords" data-view="keywords">الكلمات المفتاحية</a>
-      <a href="#write" data-view="write">الكتابة بالـ AI</a>
-      <a href="#thumb" data-view="thumb">الثمبنيل</a>
-      <a href="#seo" data-view="seo">SEO</a>
-      <a href="#video" data-view="video">تحليل فيديو</a>
+      <a href="#me" data-view="me">الرئيسية</a>
+      <a href="#ideas" data-view="ideas">الأفكار والتنبيهات <span class="count-badge num" id="alert-count" hidden></span></a>
+      <a href="#keywords" data-view="keywords">الكلمات</a>
       <a href="#competitors" data-view="competitors">المنافسين</a>
-      <a href="#me" data-view="me">قناتي</a>
-      <a href="#edit" data-view="edit">تعديل القناة</a>
-      <a href="#ranks" data-view="ranks">ترتيبك في البحث</a>
+      <a href="#video" data-view="video">تحسين الفيديو</a>
       <a href="#settings" data-view="settings">الإعدادات</a>
     </nav>
     <div class="quota" id="quota" title="YouTube Data API: 10,000 وحدة في اليوم مجانًا">
@@ -151,7 +146,7 @@
     </section>
 
     <!-- ===== keywords ===== -->
-    <section class="view" id="view-keywords">
+    <section class="view" id="view-keywords" hidden>
       <header class="view-head">
         <h1>الكلمات المفتاحية</h1>
         <p class="muted">اكتب الموضوع زي ما المشاهد هيكتبه في البحث. التحليل بياخد حوالي 102 وحدة من الـ quota، والاقتراحات مجانية.</p>
@@ -323,6 +318,7 @@
         <h1>الإعدادات</h1>
         <p class="muted">المفاتيح بتتحفظ في ملف <code>studio/.env</code> على جهازك بس.</p>
       </header>
+      <div id="setup-steps"></div>
       <div class="settings-grid">
         <form class="panel" id="settings-form" autocomplete="off">
           <h2>المفاتيح</h2>
@@ -395,12 +391,12 @@
   </main>
 </div>
 <div class="toast" id="toast" hidden></div>
-<script src="/static/app.js?v=9"></script>
-<script src="/static/ideas.js?v=9"></script>
-<script src="/static/write.js?v=9"></script>
-<script src="/static/thumb.js?v=9"></script>
-<script src="/static/channel.js?v=9"></script>
-<script src="/static/edit.js?v=9"></script>
-<script src="/static/ranks.js?v=9"></script>
+<script src="/static/app.js?v=11"></script>
+<script src="/static/ideas.js?v=11"></script>
+<script src="/static/write.js?v=11"></script>
+<script src="/static/thumb.js?v=11"></script>
+<script src="/static/channel.js?v=11"></script>
+<script src="/static/edit.js?v=11"></script>
+<script src="/static/ranks.js?v=11"></script>
 </body>
 </html>

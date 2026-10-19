@@ -102,7 +102,7 @@ const COLUMNS = {
       <div class="c">${esc(v.channel_title || '')}${v.duration ? ' · ' + clock(v.duration) : ''}</div></div></a>`,
   },
   views: { h: 'المشاهدات', cell: (v) => num(v.views) },
-  vpd: { h: 'مشاهدة/يوم', cell: (v) => num(v.vpd) },
+  vpd: { h: 'مشاهدة/يوم', cell: (v) => (v.age_days < 2 ? '<span class="muted small">لسه جديد</span>' : num(v.vpd)) },
   age: { h: 'اتنشر', cell: (v) => ago(v.age_days) },
   subs: { h: 'مشتركين القناة', cell: (v) => num(v.subs) },
   ratio: { h: 'مشاهدات ÷ مشتركين', cell: (v) => ratioBadge(v.outlier) },
@@ -165,7 +165,20 @@ function renderSeo(seo) {
 }
 
 // ---------- router ----------
-const VIEWS = ['ideas', 'keywords', 'write', 'thumb', 'seo', 'video', 'competitors', 'me', 'edit', 'ranks', 'settings'];
+const VIEWS = ['me', 'ideas', 'keywords', 'ranks', 'competitors', 'video', 'seo', 'write', 'thumb', 'edit', 'settings'];
+// The sidebar has 6 sections; two of them hold several pages shown as tabs.
+const SECTIONS = {
+  me: ['me'],
+  ideas: ['ideas'],
+  keywords: ['keywords', 'ranks'],
+  competitors: ['competitors'],
+  video: ['video', 'seo', 'write', 'thumb', 'edit'],
+  settings: ['settings'],
+};
+const TAB_LABELS = {
+  keywords: 'بحث الكلمات', ranks: 'ترتيبك في البحث',
+  video: 'تحليل فيديو منشور', seo: 'SEO قبل النشر', write: 'الكتابة بالـ AI', thumb: 'الثمبنيل', edit: 'تعديل جماعي',
+};
 // Pages in other files (ideas.js, write.js, thumb.js, channel.js, edit.js, ranks.js) register their own entries.
 const onEnter = {
   competitors: () => loadCompetitors(),
@@ -174,10 +187,23 @@ const onEnter = {
 };
 
 function route() {
-  const name = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'keywords';
+  const name = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'me';
+  const section = Object.keys(SECTIONS).find((s) => SECTIONS[s].includes(name));
   VIEWS.forEach((v) => { $(`#view-${v}`).hidden = v !== name; });
-  $$('nav a').forEach((a) => a.classList.toggle('active', a.dataset.view === name));
-  $('#setup-banner').hidden = status.has_key !== false || name === 'settings';
+  $$('nav a').forEach((a) => a.classList.toggle('active', a.dataset.view === section));
+  const pages = SECTIONS[section];
+  if (pages.length > 1) {
+    const view = $(`#view-${name}`);
+    let tabs = $(':scope > .subnav', view);
+    if (!tabs) {
+      tabs = document.createElement('nav');
+      tabs.className = 'tabs subnav';
+      tabs.innerHTML = pages.map((p) => `<a class="tab" href="#${p}" data-page="${p}">${TAB_LABELS[p]}</a>`).join('');
+      view.prepend(tabs);
+    }
+    $$('.tab', tabs).forEach((t) => t.setAttribute('aria-selected', String(t.dataset.page === name)));
+  }
+  $('#setup-banner').hidden = status.has_key !== false || name === 'settings' || name === 'me';
   onEnter[name]?.();
 }
 
@@ -241,20 +267,24 @@ function keywordChips(list) {
 function renderKeyword(d) {
   if (d.empty) return empty('مفيش نتايج في البحث للكلمة دي.') + (d.suggestions.length ? `<div class="panel">${keywordChips(d.suggestions)}</div>` : '');
   const s = d.scores, st = d.stats;
+  const verdict = s.overall >= 70 ? 'فرصة ممتازة: الناس بتدور عليها والمنافسة مش صعبة.'
+    : s.overall >= 50 ? 'فرصة كويسة تستاهل فيديو.'
+      : s.overall >= 35 ? 'متوسطة: تنفع لو عندك زاوية مختلفة عن اللي موجود.'
+        : 'صعبة: الطلب قليل أو المنافسة قوية. جرّب كلمة أدق من اللي تحت.';
+  const t = tone(s.overall);
   return `
-    <div class="grid kpis">
-      ${scoreCard('التقييم العام', s.overall, `${s.overall_label}: الطلب قصاد المنافسة`)}
-      ${scoreCard('الطلب (تقدير)', s.demand, 'من سرعة مشاهدات أول النتايج واقتراحات البحث')}
-      ${scoreCard('المنافسة', s.competition, 'من حجم القنوات اللي في أول النتايج', true)}
+    <div class="panel verdict">
+      <div class="verdict-score ${t} num">${s.overall}</div>
+      <div class="verdict-body">
+        <h2>${verdict}</h2>
+        <div class="meters">
+          <div><span class="muted small">الطلب</span><div class="meter"><span style="width:${s.demand}%"></span></div><span class="muted small num">${s.demand}/100</span></div>
+          <div><span class="muted small">المنافسة</span><div class="meter ${s.competition >= 65 ? 'rust' : ''}"><span style="width:${s.competition}%"></span></div><span class="muted small num">${s.competition}/100</span></div>
+        </div>
+        ${d.notes.length ? `<ul class="notes">${d.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}
+      </div>
     </div>
-    <div class="grid kpis">
-      ${statCard('متوسط مشاهدات/يوم لأول 10', num(st.median_vpd))}
-      ${statCard('متوسط مشتركين قنواتهم', num(st.median_subs))}
-      ${statCard('عناوين فيها الكلمة', `<span class="num">${st.match_pct}%</span>`)}
-      ${statCard('أحدث من 6 شهور', `<span class="num">${st.fresh_pct}%</span>`)}
-      ${statCard('قنوات صغيرة في أول 10', `<span class="num">${st.small_channels}</span>`, 'أقل من 10K مشترك')}
-    </div>
-    ${d.notes.length ? `<div class="panel"><ul class="notes">${d.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul></div>` : ''}
+    <p class="source">المصدر: أول 25 نتيجة لما حد يبحث عن «${esc(d.keyword)}» على يوتيوب في ${esc(status.region || 'EG')}، واقتراحات البحث. الطلب = أول 10 فيديوهات بتجيب كام مشاهدة في اليوم، والمنافسة = حجم قنواتهم. ده تقدير للمقارنة بين الكلمات، مش عدد بحث حقيقي.</p>
     <div class="row-inline wrap">
       <button class="btn small" data-plan-kw="${esc(d.keyword)}">ضيفها لمخطط الفيديوهات</button>
       <button class="btn small" data-write-kw="${esc(d.keyword)}">اكتب عناوين ليها بالـ AI</button>
@@ -273,8 +303,19 @@ function renderKeyword(d) {
         <p class="muted small">الرقم جنب التاج = عدد الفيديوهات اللي مستخدماه من أول 25. اضغط على التاج تنسخه.</p>
       </div>
     </div>
-    <div class="section-head"><h2>أول 25 نتيجة في البحث</h2></div>
-    ${table(d.videos, ['video', 'views', 'vpd', 'age', 'subs', 'ratio', 'match'])}`;
+    <details class="more">
+      <summary>الأرقام بالتفصيل وأول 25 نتيجة في البحث</summary>
+      <div class="more-body">
+        <div class="grid kpis">
+          ${statCard('أول 10 بيجيبوا في اليوم (الوسيط)', num(st.median_vpd), 'مشاهدة')}
+          ${statCard('مشتركين قنواتهم (الوسيط)', num(st.median_subs))}
+          ${statCard('عناوين فيها الكلمة', `<span class="num">${st.match_pct}%</span>`)}
+          ${statCard('أحدث من 6 شهور', `<span class="num">${st.fresh_pct}%</span>`)}
+          ${statCard('قنوات صغيرة في أول 10', `<span class="num">${st.small_channels}</span>`, 'أقل من 10K مشترك')}
+        </div>
+        ${table(d.videos, ['video', 'views', 'vpd', 'age', 'subs', 'ratio', 'match'])}
+      </div>
+    </details>`;
 }
 
 $('#kw-result').addEventListener('click', async (e) => {
@@ -646,6 +687,7 @@ $('#comp-list').addEventListener('click', async (e) => {
 function fillSettings() {
   loadStatus().then(() => {
     const pill = (el, ok) => { el.textContent = ok ? 'متسجل' : 'مش موجود'; el.classList.toggle('ok', ok); };
+    $('#setup-steps').innerHTML = renderSetup(setupSteps());
     const form = $('#settings-form');
     pill($('#st-key'), status.has_key);
     pill($('#st-client'), status.has_client);

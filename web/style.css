@@ -375,3 +375,51 @@ tr.me td { background: var(--champagne-veil); }
 }
 .pl-grid { grid-template-columns: minmax(260px, 1fr) minmax(0, 2fr); align-items: start; }
 @media (max-width: 860px) { .pl-grid { grid-template-columns: 1fr; } }
+
+/* ---------- simpler, vidIQ-style layout ---------- */
+.home-head { display: flex; align-items: center; gap: 14px; }
+.home-head img { width: 56px; height: 56px; border-radius: 50%; background: var(--onyx-high); }
+.home-head > div { flex: 1; min-width: 0; }
+.setup .steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.setup .steps li { display: grid; grid-template-columns: 18px 1fr auto; gap: 10px; align-items: center; }
+.setup .steps .mark::before { content: ""; display: inline-block; width: 9px; height: 9px; border: 1.5px solid var(--ivory-muted); transform: rotate(45deg); }
+.setup .steps li.done .mark::before { background: var(--champagne); border-color: var(--champagne); }
+.setup .steps li.done b { color: var(--ivory-muted); font-weight: 400; }
+.score-inline { font-size: 40px; font-weight: 200; }
+.score-inline.good { color: var(--champagne); }
+.score-inline.bad { color: var(--rust); }
+.vcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+.vcard { display: flex; flex-direction: column; gap: 6px; color: var(--ivory); }
+.vcard:hover { text-decoration: none; }
+.vcard img { width: 100%; aspect-ratio: 16/9; object-fit: cover; border-radius: var(--radius-md); background: var(--onyx-high); }
+.vcard .t { font-weight: 500; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.vcard .m { font-size: 12px; color: var(--ivory-muted); }
+.vcard .badge { align-self: flex-start; }
+.badge.soft { background: transparent; border: 1px dashed var(--line); }
+.badge.low { background: transparent; border: 1px solid var(--rust); color: var(--rust); }
+details.more { border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--onyx-raised); }
+details.more > summary { cursor: pointer; padding: 14px 18px; font-weight: 500; list-style: none; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+details.more > summary::-webkit-details-marker { display: none; }
+details.more > summary::before { content: ""; width: 7px; height: 7px; border-left: 1.5px solid var(--champagne); border-bottom: 1.5px solid var(--champagne); transform: rotate(45deg); transition: transform .15s; }
+details.more[open] > summary::before { transform: rotate(-45deg); }
+.more-body { padding: 0 18px 18px; display: flex; flex-direction: column; gap: 14px; }
+.more-body.panel { border: none; }
+.verdict { flex-direction: row; gap: 24px; align-items: flex-start; }
+.verdict-score { font-size: 72px; font-weight: 200; line-height: 1; min-width: 96px; text-align: center; }
+.verdict-score.good { color: var(--champagne); }
+.verdict-score.bad { color: var(--rust); }
+.verdict-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.meters { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px 20px; }
+.meters > div { display: grid; grid-template-columns: 60px 1fr 50px; gap: 8px; align-items: center; }
+.source { font-size: 12px; color: var(--ivory-muted); margin: -8px 0 0; }
+.subnav { margin-bottom: -4px; }
+.subnav .tab { text-decoration: none; }
+@media (max-width: 860px) {
+  .verdict { flex-direction: column; gap: 8px; }
+  .verdict-score { text-align: start; }
+}
+/* The page tabs are a <nav> too; keep them a horizontal tab bar, not the sidebar menu style. */
+nav.subnav { flex-direction: row; gap: 4px; flex-wrap: wrap; }
+nav.subnav a.tab { padding: 8px 14px; border-radius: 0; color: var(--ivory-muted); }
+nav.subnav a.tab:hover { background: transparent; color: var(--ivory); }
+nav.subnav a.tab[aria-selected="true"] { color: var(--ivory); }

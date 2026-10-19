@@ -83,6 +83,7 @@ def status():
         "channel_voice": config.get("CHANNEL_VOICE"),
         "thumbnail_rules": config.get("THUMBNAIL_RULES"),
         "unread_alerts": alerts.unread_count(),
+        "competitor_count": len(db.query("SELECT channel_id FROM competitors")),
         "last_job": jobs.last_run(),
         "editing": editor.status(),
         "rank_max_keywords": ranks.max_keywords(),
@@ -292,6 +293,11 @@ def api_me_audience(days: int = 28):
 @app.get("/api/me/recent")
 def api_me_recent():
     return mychannel.recent()
+
+
+@app.get("/api/home")
+def api_home():
+    return mychannel.home()
 
 
 # ---------- alerts & background jobs ----------

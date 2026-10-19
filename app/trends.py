@@ -1,6 +1,6 @@
 """YouTube's trending ("most popular") list for your region, filtered to your niche."""
 
-from . import alerts, config, util, youtube
+from . import alerts, config, db, util, youtube
 from .youtube import YouTubeError
 
 HOUR = 3600
@@ -31,15 +31,18 @@ def trending(category_id="", limit=50):
 
 
 def matches_niche(v):
-    words = config.niche_keywords()
-    text = v["title"] + " " + " ".join(v.get("tags", []))
-    return any(util.has_all_words(text, w) for w in words)
+    # Titles only: tags are often stuffed with popular words (an AI-generated song tags itself "AI", "Gemini").
+    return any(util.has_all_words(v["title"], w) for w in config.niche_keywords())
 
 
 def check_alerts():
     """Alert on trending videos that match your niche keywords (about 3 quota units)."""
     if not config.niche_keywords():
         return 0
+    # Drop earlier trend alerts that no longer match (older versions matched "AI" inside "Trailer").
+    for a in db.query("SELECT id, body FROM alerts WHERE kind = 'trend'"):
+        if not matches_niche({"title": a["body"]}):
+            db.execute("DELETE FROM alerts WHERE id = ?", (a["id"],))
     found = 0
     for cat in ALERT_CATEGORIES:
         try:
