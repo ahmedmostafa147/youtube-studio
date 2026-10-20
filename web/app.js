@@ -694,6 +694,7 @@ function fillSettings() {
     pill($('#st-ai'), status.has_ai);
     $('#st-channel').textContent = status.my_channel.title || 'مش متحددة';
     $('#st-channel').classList.toggle('ok', !!status.my_channel.id);
+    $('#redirect-uri').textContent = status.redirect_uri;
     form.region.placeholder = status.region;
     form.lang.placeholder = status.lang;
     form.rpm.placeholder = status.rpm;
@@ -730,6 +731,8 @@ $('#settings-form').addEventListener('submit', async (e) => {
     } catch (err) { $('#settings-msg').textContent = err.message; }
   });
 });
+
+$('#redirect-copy').addEventListener('click', () => copy($('#redirect-uri').textContent, 'اتنسخ العنوان'));
 
 // ---------- start ----------
 window.addEventListener('hashchange', route);

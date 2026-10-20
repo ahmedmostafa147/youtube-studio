@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Alexandria:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/style.css?v=12">
+  <link rel="stylesheet" href="/static/style.css?v=13">
 </head>
 <body>
 <div class="shell">
@@ -381,7 +381,10 @@
             <li>فعّل <a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" rel="noopener">YouTube Data API v3</a> و <a href="https://console.cloud.google.com/apis/library/youtubeanalytics.googleapis.com" target="_blank" rel="noopener">YouTube Analytics API</a>.</li>
             <li>من <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Credentials</a> اعمل <b>API key</b> وحطه هنا. ده كفاية للكلمات والمنافسين وتحليل الفيديو.</li>
             <li>عشان «قناتي»: من <a href="https://console.cloud.google.com/auth/overview" target="_blank" rel="noopener">OAuth consent screen</a> اختار External، وضيف إيميلك في <b>Test users</b>.</li>
-            <li>من Credentials اعمل <b>OAuth client ID</b> نوعه <b>Desktop app</b>، وحط الـ Client ID والـ Secret هنا.</li>
+            <li>من Credentials اعمل <b>OAuth client ID</b> نوعه <b>Desktop app</b>، وحط الـ Client ID والـ Secret هنا. الاتنين لازم يكونوا من نفس الـ client.
+              <div class="muted small">لو عملته <b>Web application</b> وطلعلك خطأ <code>redirect_uri_mismatch</code>: افتحه، وفي <b>Authorized redirect URIs</b> ضيف العنوان ده بالظبط، واحفظ واستنى 5 دقايق:</div>
+              <div class="row-inline"><code id="redirect-uri"></code><button class="btn small" type="button" id="redirect-copy">انسخ</button></div>
+            </li>
             <li>عشان الكتابة بالـ AI من الداشبورد: اعمل مفتاح من <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Claude Console</a> (بيتحاسب بالاستخدام). من Claude Code مش محتاجه.</li>
           </ol>
           <p class="muted small">لو الـ consent screen فاضل في وضع Testing، جوجل بتطلب منك تربط القناة تاني كل 7 أيام. عشان تتجنب ده اعمل Publish للتطبيق (هيطلعلك تحذير إن التطبيق مش متراجع، وده عادي لأنه تطبيقك إنت).</p>
@@ -391,12 +394,12 @@
   </main>
 </div>
 <div class="toast" id="toast" hidden></div>
-<script src="/static/app.js?v=12"></script>
-<script src="/static/ideas.js?v=12"></script>
-<script src="/static/write.js?v=12"></script>
-<script src="/static/thumb.js?v=12"></script>
-<script src="/static/channel.js?v=12"></script>
-<script src="/static/edit.js?v=12"></script>
-<script src="/static/ranks.js?v=12"></script>
+<script src="/static/app.js?v=13"></script>
+<script src="/static/ideas.js?v=13"></script>
+<script src="/static/write.js?v=13"></script>
+<script src="/static/thumb.js?v=13"></script>
+<script src="/static/channel.js?v=13"></script>
+<script src="/static/edit.js?v=13"></script>
+<script src="/static/ranks.js?v=13"></script>
 </body>
 </html>
